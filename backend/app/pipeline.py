@@ -25,6 +25,7 @@ from .state import AppState
 log = logging.getLogger(__name__)
 
 SERIAL_CHECK_S = 5.0
+STATUS_TICK_S = 1.0     # status push interval while recording or replaying
 
 
 class Pipeline:
@@ -48,6 +49,7 @@ class Pipeline:
         self.analyzer = Analyzer(state.registry, state.settings, self.scorer)
         self.train_jobs = TrainJobs(state.registry, state.settings, on_done=self.reload_model)
         self._serial_cache: tuple[float, dict[str, Any]] | None = None
+        self._last_notify = 0.0
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -118,10 +120,13 @@ class Pipeline:
                 pass
 
     async def _watch_link(self) -> None:
-        """Push a status message when the debounced connected flag flips without any event."""
+        """Push a status message when the debounced connected flag flips without any event,
+        and once a second while recording or replaying (row count, elapsed time, progress)."""
         while True:
             await asyncio.sleep(0.25)
-            if self.link()["connected"] != self._reported_connected:
+            ticking = self.state.recorder.active or isinstance(self.source, ReplaySource)
+            if (self.link()["connected"] != self._reported_connected
+                    or (ticking and time.monotonic() - self._last_notify >= STATUS_TICK_S)):
                 await self.notify_status()
 
     async def _run(self, source: Source) -> None:
@@ -228,6 +233,7 @@ class Pipeline:
             "speed": src.get("speed"),
             "file": src.get("file"),
             "loop": src.get("loop"),
+            "progress": src.get("progress"),       # replay only: share of the file played, 0..1
             "serial_port": src.get("serial_port"),
             **self.link(),
             "last_error": src.get("last_error"),
@@ -285,4 +291,5 @@ class Pipeline:
     async def notify_status(self) -> None:
         status = self.status()
         self._reported_connected = status["connected"]
+        self._last_notify = time.monotonic()
         await self.state.broadcaster.send({"type": "status", "status": status})

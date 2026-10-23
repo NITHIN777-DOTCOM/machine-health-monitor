@@ -51,6 +51,15 @@ def _seconds(record: dict[str, str], prev: dict[str, str] | None) -> float:
         return 1.0
 
 
+def _count_records(path: Path) -> int:
+    """Data records in a recording (comment lines and the header excluded)."""
+    try:
+        with path.open(newline="", encoding="utf-8") as f:
+            return sum(1 for _ in csv.DictReader(line for line in f if not line.startswith("#")))
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return 0
+
+
 class ReplaySource(Source):
     kind = "replay"
 
@@ -61,6 +70,8 @@ class ReplaySource(Source):
         self.loop = loop
         self.rows_played = 0
         self.passes = 0
+        self.pass_rows = 0                   # rows played in the current pass (progress)
+        self.rows_total = _count_records(path)
         self._sleep = asyncio.sleep  # replaceable in tests
 
     async def rows(self) -> AsyncIterator[SensorRow]:
@@ -68,6 +79,7 @@ class ReplaySource(Source):
         log.info("Replaying %s at %sx%s", self.path.name, self.speed, " (looping)" if self.loop else "")
         while True:
             prev: dict[str, str] | None = None
+            self.pass_rows = 0
             with self.path.open(newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(line for line in f if not line.startswith("#"))
                 for record in reader:
@@ -81,6 +93,7 @@ class ReplaySource(Source):
                     if gap:
                         await self._sleep(gap / self.speed)
                     self.rows_played += 1
+                    self.pass_rows += 1
                     yield row.with_meta(mode="recorded", ts_iso=now_iso())
             self.passes += 1
             if not self.loop:
@@ -96,4 +109,8 @@ class ReplaySource(Source):
             "speed": self.speed,
             "loop": self.loop,
             "rows_played": self.rows_played,
+            "rows_total": self.rows_total,
+            "passes": self.passes,
+            # Share of the current pass played, 0..1 (1.0 once a non-looping replay ends).
+            "progress": round(min(1.0, self.pass_rows / self.rows_total), 3) if self.rows_total else None,
         }

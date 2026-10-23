@@ -22,7 +22,8 @@ so docs and UI text must be clear to a newcomer.
 | `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `train.py`, `evaluate.py`, `run_tests.bat` |
 | `backend/tests/` | pytest suite (287 tests), `helpers.py`, `conftest.py` |
 | `dashboard/` | Vite + React 19 + TS (strict) + Recharts. `src/types.ts` mirrors the backend JSON; `src/lib/` pure helpers (Vitest); `scripts/screenshots.mjs` (Playwright, project-local Chromium). See `dashboard/README.md` |
-| `docs/screenshots/phase4/` | Review screenshots (committed) |
+| `docs/screenshots/phase5/` | Review screenshots (committed; `npm run screenshots`) |
+| `docs/phase5_report.md` | Phase 5 report (redesign, health curve, controls, decisions) |
 | `firmware/` | `README.md` (pin map, libraries, upload), `machine_monitor/` (sketch not written yet) |
 | `data/recordings/` | Real recordings (committed). `data/synthetic/` is gitignored, regenerate it |
 | `models/` | `model.joblib` + `model_meta.json` (committed, PROVISIONAL) |
@@ -98,8 +99,9 @@ Dashboard (from `dashboard/`): `npm install` once, `npm run dev` (http://127.0.0
 ## Phase status
 - Done: 1 (scaffold, contract, registry) → 2.x (backend core, sources, recorder, hysteresis, tests)
   → 3.1 (ML engine offline) → 3.2 (live ML pipeline, warm start, model API) → 4 (lean dashboard,
-  `MHM_SOURCE`).
-- Next: **5 extras** (Record/Stop, Replay, scenario and source buttons in the dashboard), 6 portability (start.bat, PyInstaller, offline), 7 firmware, 8 real data + retrain + retune limits,
+  `MHM_SOURCE`) → 5 (ISA-101 redesign, gradual health curve, plain-language text, Controls drawer:
+  source/scenario/speed, Record/Stop + label, Replay with progress, warm start).
+- Next: 6 portability (start.bat, PyInstaller, offline), 7 firmware, 8 real data + retrain + retune limits,
   9 release + docs.
 
 ## Known open items

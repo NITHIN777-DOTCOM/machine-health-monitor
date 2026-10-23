@@ -152,3 +152,60 @@ dependencies `lucide-react` and `@fontsource/inter` in the Part A commit).
 ### Results
 - Backend pytest: **297 passed** (287 before; +10 new tests).
 - Vitest: **46 passed**. `tsc --noEmit` and `npm run build` clean. Contrast check passes.
+
+## Part C: dashboard controls and screenshots
+
+### What was added
+A **Controls** button in the top bar opens a right-hand drawer (`components/ControlsPanel.tsx`);
+the main view is unchanged while it is closed. Below 1100 px wide the drawer overlays the
+page instead of squeezing it.
+
+1. **Source switcher** Live (Arduino) / Simulated / Recorded (`POST /api/source`). Live is
+   disabled with the backend's reason when `status.serial.available` is false; with
+   `MHM_SOURCE=simulator` it says "Serial disabled (MHM_SOURCE=simulator). Unset it and
+   restart to use the Arduino." Without the env var, "No Arduino found ..." (ports are
+   checked at most every 5 s, never with `MHM_SOURCE=simulator`).
+2. **Scenarios** Normal, Sudden fault, Slow drift, Recovery, Sensor fault (only those the
+   backend lists), speed 1x / 5x / 10x, and **Fast-forward drift** (slow drift at 10x). The
+   active scenario and speed are highlighted.
+3. **Record / Stop** with elapsed time and row count in the panel and a blinking **REC
+   0:09 · 42 rows** indicator in the top bar (visible with the panel closed; the blink
+   stops with `prefers-reduced-motion`). **Label** toggle Normal / Fault / None
+   (`POST /api/label`) showing the current label.
+4. **Replay**: recordings from `/api/recordings` (name, duration, rows, date), speed
+   1x / 5x / 10x, loop, Play, progress bar ("44 / 90 rows · 49%", "pass 3" when looping).
+5. **Start from recording**: choose a file → `POST /api/warmstart`.
+6. **Errors inline** at the top of the panel, in plain words (e.g. "Port busy: close the
+   Arduino IDE Serial Monitor (or any other program using the port)."); the serial source's
+   `last_error` (busy port) is shown there too. One request at a time: every button is
+   disabled while a request is in flight.
+
+### Backend changes for Part C
+- `ReplaySource.status()`: `rows_total`, `passes`, `progress` (0..1, current pass);
+  `/api/status` has a top-level `progress`.
+- `/api/recordings`: new `modified` (ISO time); `duration_s` now uses the **device clock**
+  first (what a 1x replay takes; a 5x simulated recording was shown 5x too short before),
+  then wall-clock `ts_iso`.
+- The pipeline pushes a status message **once a second while recording or replaying**
+  (before, status was only sent on events, so the row count and progress froze).
+- (From Part B) `serial: {available, port, note}` in `/api/status`.
+
+### Tests
+- Vitest `src/lib/controls.test.ts` (9 tests): source mapping, Live enable/disable with
+  the note, request bodies, scenario list/order, the in-flight reducer, API error wording
+  (busy port, MHM_SOURCE, 404, 422, network), elapsed time, durations, replay progress.
+- Backend: `test_replay_progress`, progress/rows_total/`modified` checks in the API
+  round-trip test, `duration_s == 9.0` (device clock) in `test_list_recordings`.
+- Not unit-tested (checked live instead): the once-a-second status push.
+
+### Screenshots (`docs/screenshots/phase5/`, 40 files)
+Each of `normal`, `sudden_fault`, `slow_drift`, `recovery`, `sensor_fault`, `recording`,
+`controls`, `replay` at `1366x768_light`, `1366x768_dark`, `1920x1080_light`,
+`1920x1080_dark`, plus `<state>_full_1366_light.png` (full page). Taken with
+`npm run screenshots` (backend with `MHM_SOURCE=simulator`). The script makes one
+recording for the replay shots and deletes it at the end; `data/recordings/` holds only
+`.gitkeep`. `docs/screenshots/phase4/` was deleted.
+
+### Results
+- Backend pytest: **298 passed**. Vitest: **55 passed** (4 files). `tsc --noEmit` and
+  `npm run build` clean. Contrast check: all pairs pass.

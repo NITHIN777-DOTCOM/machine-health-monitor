@@ -159,7 +159,7 @@ def test_list_recordings(registry, recorder, run_sim, tmp_path):
     info = list_recordings(tmp_path)
     assert len(info) == 1
     assert info[0]["file"] == path.name and info[0]["rows"] == 10 and info[0]["size_bytes"] > 0
-    assert info[0]["duration_s"] is not None and info[0]["error"] is None
+    assert info[0]["duration_s"] == 9.0 and info[0]["error"] is None      # device clock: 10 rows, 1 s apart
 
 
 @pytest.mark.parametrize("name", ["../secrets.csv", "missing.csv", "notes.txt"])
@@ -167,3 +167,16 @@ def test_resolve_recording_rejects_bad_names(tmp_path, name):
     (tmp_path / "notes.txt").write_text("x")
     with pytest.raises(FileNotFoundError):
         resolve_recording(tmp_path, name)
+
+
+
+def test_replay_progress(recorder, registry):
+    from helpers import rows_from
+    path = recorder.start()
+    for r in rows_from([{"temp_c": 29.0, "humidity": 60.0, "sound_peak": 4, "vib_count": 0}] * 4):
+        recorder.write(r)
+    recorder.stop()
+    fresh = ReplaySource(registry=registry, stats=ParseStats(), path=path)
+    assert (fresh.status()["rows_total"], fresh.status()["progress"]) == (4, 0.0)
+    rows, _, src = replay(registry, path, speed=20)
+    assert len(rows) == 4 and src.status()["progress"] == 1.0 and src.status()["passes"] == 1

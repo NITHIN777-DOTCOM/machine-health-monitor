@@ -90,6 +90,7 @@ def test_record_label_and_replay_round_trip(client, tmp_path):
 
     recs = client.get("/api/recordings").json()["recordings"]
     assert recs[0]["file"] == start["file"] and recs[0]["rows"] == stop["rows"]
+    assert recs[0]["modified"]                                   # shown as the date in the dashboard
 
     # simulator -> replay -> simulator
     r = client.post("/api/source", json={"type": "replay", "file": start["file"], "speed": 20})
@@ -99,6 +100,8 @@ def test_record_label_and_replay_round_trip(client, tmp_path):
              timeout=3 + 0.15 * stop["rows"])
     detail = client.get("/api/status").json()["source_detail"]
     assert detail["rows_played"] == stop["rows"]
+    assert detail["rows_total"] == stop["rows"] and detail["progress"] == 1.0
+    assert client.get("/api/status").json()["progress"] == 1.0
     s = fast_sim(client, "recovery")
     assert (s["source"], s["scenario"]) == ("simulator", "recovery")
 

@@ -31,7 +31,8 @@ hang on IPv6. The Vite dev server forwards `/api/...` and `/ws/stream` to the ba
 (`vite.config.ts`). The app only uses **relative URLs**, so the same build will work when
 FastAPI serves it in Phase 6.
 
-To try scenarios, switch the simulator with curl (there are no buttons for this until Phase 5):
+Scenarios, replay and recording are in the **Controls** panel (button in the top bar).
+The same switch with curl:
 
 ```
 curl -X POST http://127.0.0.1:8000/api/source -H "Content-Type: application/json" -d "{\"type\":\"simulator\",\"scenario\":\"sudden_fault\",\"speed\":3}"
@@ -44,11 +45,12 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server with hot reload on http://127.0.0.1:5173 |
-| `npm test` | Vitest unit tests (formatting helpers, sensor cards, trend buffer) |
+| `npm test` | Vitest unit tests (formatting, cause/confidence bands, sensor cards, trend buffer, chart grid, control logic) |
 | `npm run typecheck` | TypeScript check only |
 | `npm run build` | Type check + production build into `dist/` (gitignored) |
 | `npm run screenshots:install` | Once: downloads Playwright's Chromium **into this project** (`node_modules`) |
-| `npm run screenshots` | Takes the review screenshots into `docs/screenshots/phase4/` (backend in simulator mode + dev server must be running). `npm run screenshots -- recovery` for one scenario. |
+| `npm run screenshots` | Takes the review screenshots into `docs/screenshots/phase5/` (backend with `MHM_SOURCE=simulator` + dev server must be running): the five scenarios, recording, controls and replay, at 1366x768 and 1920x1080, light and dark. `npm run screenshots -- recovery` for one step (`replay` needs `recording` in the same run). The recording it makes is deleted at the end. |
+| `node scripts/contrast.mjs` | WCAG contrast check of the colour tokens |
 
 ## What is on the page
 
@@ -76,6 +78,23 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 5. **Trends**: one chart per enabled sensor plus the ML health score, last 5 minutes of
    the **device clock** (`ms`), with dashed warn/critical lines.
 6. **Footer**: source, serial port, rows received/rejected, model date.
+7. **Controls** (right-hand drawer, opened from the top bar; overlays the page below 1100 px):
+   - **Data source**: Live (Arduino) / Simulated / Recorded (`POST /api/source`). Live is
+     disabled, with the backend's reason, when `status.serial.available` is false
+     (`MHM_SOURCE=simulator`, or no Arduino found).
+   - **Scenario** (simulated): Normal, Sudden fault, Slow drift, Recovery, Sensor fault, a
+     speed selector 1x / 5x / 10x (a change restarts the running scenario) and
+     **Fast-forward drift** (slow drift at 10x).
+   - **Replay** (recorded): the list from `GET /api/recordings` (name, duration on the device
+     clock, rows, date), speed 1x / 5x / 10x, loop, Play, and a progress bar from
+     `status.progress`.
+   - **Record**: Start / Stop, elapsed time and row count (also shown as **REC** in the top
+     bar while recording), and the label toggle Normal / Fault / None (`POST /api/label`)
+     for marking induced faults live. The label is stored on live (Arduino) rows.
+   - **Start from recording**: warm start from a chosen file (`POST /api/warmstart`).
+   - One request at a time: all buttons are disabled while it runs, and errors appear inline
+     at the top of the panel in plain words (e.g. "Port busy: close the Arduino IDE Serial
+     Monitor ..."). Logic in `src/lib/controls.ts` (unit-tested).
 
 ## Rules the code follows
 
@@ -104,6 +123,8 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 | `src/lib/buffer.ts` | 5-minute trend buffer |
 | `src/components/` | One file per part of the page |
 | `src/lib/format.ts` (Phase 5) | Also: cause words by |z| band, the z tooltip, forecast confidence (R² bands), health bands from `status.ml_thresholds` |
+| `src/lib/controls.ts` | Control panel logic: active source, Live availability, request bodies, error text, elapsed time, replay progress |
+| `src/components/ControlsPanel.tsx`, `RecIndicator.tsx` | The controls drawer and the top-bar REC indicator |
 | `src/lib/grid.ts` | Chart grid: columns that fit, last chart stretched so no row has a gap |
 | `src/styles.css` | All styles; colour, spacing and type tokens are CSS variables at the top |
 | `scripts/contrast.mjs` | WCAG contrast check of the colour tokens (both themes) |

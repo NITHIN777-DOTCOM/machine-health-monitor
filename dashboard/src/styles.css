@@ -134,7 +134,7 @@ main.stale { filter: grayscale(1); opacity: 0.55; }
   padding: var(--s3);
   min-width: 0;
 }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s2); margin-bottom: var(--s2); }
 .card-note { margin-top: var(--s2); font-size: var(--t-xs); color: var(--muted); }
 
 /* ---- top bar ------------------------------------------------------------------------ */
@@ -318,6 +318,74 @@ main.stale { filter: grayscale(1); opacity: 0.55; }
 .chart figcaption { font-size: var(--t-sm); font-weight: 500; margin-bottom: var(--s1); }
 .chart-box { height: 160px; }
 
+/* ---- recording indicator ------------------------------------------------------------ */
+.rec { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--t-sm); font-weight: 600; color: var(--st-critical-text); }
+.rec .muted { font-weight: 400; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--st-critical); animation: rec-blink 1.6s steps(2, start) infinite; }
+@keyframes rec-blink { to { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } }
+
+/* ---- controls drawer ---------------------------------------------------------------------- */
+.controls {
+  width: 380px;
+  flex: none;
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.controls-head { display: flex; align-items: center; justify-content: space-between; }
+.ctl { display: flex; flex-direction: column; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--border); }
+.ctl h3 { font-size: var(--t-sm); font-weight: 600; }
+.ctl-row { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.ctl-note { margin: 0; font-size: var(--t-xs); color: var(--muted); }
+.seg { display: inline-flex; }
+.seg .btn { border-radius: 0; margin-left: -1px; }
+.seg .btn:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.seg .btn:last-child { border-radius: 0 4px 4px 0; }
+.seg .btn[aria-pressed="true"] { position: relative; z-index: 1; }
+.seg-full { display: flex; }
+.seg-full .btn { flex: 1; padding: 0 var(--s2); }
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.btn-wide { width: 100%; }
+.btn-stop { border-color: var(--st-critical); color: var(--st-critical-text); }
+.inline-error {
+  display: flex; align-items: flex-start; gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  font-size: var(--t-sm);
+  background: color-mix(in srgb, var(--st-critical) var(--tint), var(--surface));
+  border-left: 4px solid var(--st-critical);
+  border-radius: 4px;
+}
+.inline-error .icon { color: var(--st-critical-text); margin-top: 2px; }
+.inline-info { margin: 0; font-size: var(--t-sm); color: var(--muted); }
+.rec-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+.rec-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: var(--s2) var(--s3); text-align: left; color: var(--text);
+  background: transparent; border: 0; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.rec-list li:last-child .rec-item { border-bottom: 0; }
+.rec-item:hover { background: var(--surface-2); }
+.rec-item.selected { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.rec-name { font-size: var(--t-sm); font-weight: 500; word-break: break-all; }
+.check { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--t-sm); }
+.check input { accent-color: var(--accent); }
+.select {
+  flex: 1; min-width: 0; height: 32px; padding: 0 var(--s2); font: inherit; font-size: var(--t-sm);
+  color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+}
+.progress { display: flex; flex-direction: column; gap: var(--s1); }
+.progress-bar { height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+
 /* ---- footer ----------------------------------------------------------------------------- */
 .footer {
   display: flex;
@@ -332,6 +400,8 @@ main.stale { filter: grayscale(1); opacity: 0.55; }
 
 @media (max-width: 1100px) {
   .cards-row { grid-template-columns: 1fr 1fr; }
+  /* Narrow screens: the drawer overlays the page instead of squeezing it. */
+  .controls { position: fixed; right: 0; top: 0; bottom: 0; max-height: none; z-index: 10; box-shadow: -2px 0 8px rgb(0 0 0 / 0.15); }
 }
 @media (max-width: 720px) {
   .cards-row { grid-template-columns: 1fr; }

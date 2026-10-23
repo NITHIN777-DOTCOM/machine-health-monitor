@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ControlsPanel } from "./components/ControlsPanel";
 import { DeviceCard } from "./components/DeviceCard";
 import { Footer } from "./components/Footer";
 import { ForecastPanel } from "./components/ForecastPanel";
 import { Icon } from "./components/Icon";
 import { MlCard } from "./components/MlCard";
+import { RecIndicator } from "./components/RecIndicator";
 import { SensorCards } from "./components/SensorCards";
 import { StatusBanner } from "./components/StatusBanner";
 import { TopBar } from "./components/TopBar";
@@ -37,6 +39,7 @@ function connectionNotice(d: DashboardData): string | null {
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const d = useDashboard();
+  const [controlsOpen, setControlsOpen] = useState(false);
   const link = linkView(d.ws, d.status?.link);
   const mode = modeView(d.row?.mode, d.status?.source);
   const sensors = useMemo(() => enabledSensors(d.registry), [d.registry]);
@@ -50,13 +53,20 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar mode={mode} link={link} theme={theme} onToggleTheme={toggleTheme} />
+      <TopBar mode={mode} link={link} theme={theme} onToggleTheme={toggleTheme}>
+        <RecIndicator rec={d.status?.recording} />
+        <button type="button" className="btn" aria-pressed={controlsOpen} aria-expanded={controlsOpen}
+          onClick={() => setControlsOpen((o) => !o)} data-testid="controls-toggle">
+          <Icon name="settings" /> Controls
+        </button>
+      </TopBar>
       {notice && (
         <div className={`notice ${link.stale ? "notice-bad" : ""}`} role="status" data-testid="notice">
             <Icon name={link.icon} />
           {notice}
         </div>
       )}
+      <div className="layout">
       <main className={link.stale && d.loaded ? "stale" : undefined}>
         <StatusBanner analysis={d.analysis} holdSeconds={holdSeconds} />
         <div className="cards-row">
@@ -67,6 +77,8 @@ export default function App() {
         <SensorCards registry={d.registry} row={d.row} />
         <TrendCharts sensors={sensors} points={d.points} healthLines={healthLines} />
       </main>
+      {controlsOpen && <ControlsPanel status={d.status} onClose={() => setControlsOpen(false)} />}
+      </div>
       <Footer status={d.status} />
     </div>
   );

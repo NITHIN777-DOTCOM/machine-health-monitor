@@ -91,11 +91,14 @@ class Recorder:
 
 
 def list_recordings(recordings_dir: Path) -> list[dict[str, Any]]:
-    """Name, size, row count and duration of every CSV in recordings_dir (newest first)."""
+    """Name, size, row count, duration and last-modified time of every CSV in recordings_dir
+    (newest first)."""
     out = []
     for path in sorted(recordings_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
-        info: dict[str, Any] = {"file": path.name, "size_bytes": path.stat().st_size,
-                                "rows": 0, "duration_s": None, "error": None}
+        st = path.stat()
+        info: dict[str, Any] = {"file": path.name, "size_bytes": st.st_size, "rows": 0, "duration_s": None,
+                                "modified": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
+                                "error": None}
         try:
             with path.open(newline="", encoding="utf-8") as f:
                 first = last = None
@@ -112,12 +115,16 @@ def list_recordings(recordings_dir: Path) -> list[dict[str, Any]]:
 
 
 def _duration(first: dict[str, str], last: dict[str, str]) -> float | None:
+    """Device-clock length (what a 1x replay takes; a 5x simulated recording is 5x longer
+    than its wall-clock time), else wall-clock ts_iso if ms is missing or went backwards."""
     try:
-        delta = datetime.fromisoformat(last[TS_COLUMN]) - datetime.fromisoformat(first[TS_COLUMN])
-        return round(delta.total_seconds(), 1)
+        ms = (float(last[TIME_COLUMN]) - float(first[TIME_COLUMN])) / 1000.0
+        if ms >= 0:
+            return round(ms, 1)
     except (KeyError, TypeError, ValueError):
         pass
     try:
-        return round((float(last[TIME_COLUMN]) - float(first[TIME_COLUMN])) / 1000.0, 1)
+        delta = datetime.fromisoformat(last[TS_COLUMN]) - datetime.fromisoformat(first[TS_COLUMN])
+        return round(delta.total_seconds(), 1)
     except (KeyError, TypeError, ValueError):
         return None

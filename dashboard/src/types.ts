@@ -190,6 +190,8 @@ export interface Status {
   speed: number | null;
   file: string | null;
   loop: boolean | null;
+  /** Replay only: share of the file played in the current pass, 0..1. */
+  progress: number | null;
   serial_port: string | null;
   connected: boolean;
   link: Link;
@@ -234,6 +236,17 @@ export interface SerialInfo {
 export interface HistoryRow {
   analysis?: CompactAnalysis | null;
   [column: string]: unknown;
+}
+
+/** One entry of GET /api/recordings. */
+export interface Recording {
+  file: string;
+  size_bytes: number;
+  rows: number;
+  duration_s: number | null;
+  /** File's last-modified time, ISO 8601. */
+  modified: string;
+  error: string | null;
 }
 
 export interface HistoryResponse {

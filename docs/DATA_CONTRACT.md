@@ -392,7 +392,11 @@ below `forecast_min_r2`), medium (0.6–0.85), high (≥ 0.85)**, with R² in a 
 
 `GET /api/status` also has `serial`: `{available, port, note}`. `available` is false with
 `MHM_SOURCE=simulator` (ports are never listed) or when no Arduino is found (checked at most
-every 5 s), and `note` says why.
+every 5 s), and `note` says why. For a replay, `progress` is the share of the file played in
+the current pass (0..1; `source_detail` has `rows_total` and `passes`). While recording or
+replaying, the backend pushes a status message once a second so the row count, elapsed time
+and progress stay current. `GET /api/recordings` lists `file`, `rows`, `duration_s` (device
+clock, i.e. what a 1x replay takes), `size_bytes` and `modified` (ISO time).
 
 **Warm start.** A recording's last W + 60 s can pre-fill the ML window and the forecast
 history, so a new source doesn't start with "warming up". For the first W live rows the
