@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Theme } from "../hooks/useTheme";
 import type { LinkView, ModeView } from "../lib/format";
 import { Icon } from "./Icon";
@@ -7,39 +8,43 @@ interface Props {
   link: LinkView;
   theme: Theme;
   onToggleTheme: () => void;
+  /** Extra buttons on the right (the Controls toggle). */
+  children?: ReactNode;
 }
 
-const MODE_ICON = { live: "dot", recorded: "clock", simulated: "spark" } as const;
-
-export function TopBar({ mode, link, theme, onToggleTheme }: Props) {
+export function TopBar({ mode, link, theme, onToggleTheme, children }: Props) {
+  const other = theme === "dark" ? "light" : "dark";
   return (
     <header className="topbar">
       <div className="brand">
-        <Icon name="pulse" size={28} />
-        <span>Machine Health Monitor</span>
+        <Icon name="pulse" size={20} className="brand-mark" />
+        <div>
+          <h1>Machine Health Monitor</h1>
+          <div className="brand-sub">BCSE305L Embedded Systems</div>
+        </div>
       </div>
       <div className="topbar-right">
         {mode ? (
           <span className={`mode-badge mode-${mode.cls}`} title={mode.title} data-testid="mode-badge">
-            <Icon name={MODE_ICON[mode.cls]} size={18} />
+            <span className="mode-dot" aria-hidden="true" />
             {mode.label}
           </span>
         ) : (
-          <span className="mode-badge mode-unknown">NO SOURCE</span>
+          <span className="mode-badge mode-unknown"><span className="mode-dot" aria-hidden="true" />NO SOURCE</span>
         )}
-        <span className={`link tone-text-${link.tone}`} data-testid="link">
-          <Icon name={link.icon} size={20} />
+        <span className="link" data-testid="link">
+          <span className={`dot dot-${link.tone}`} aria-hidden="true" />
           {link.label}
         </span>
+        {children}
         <button
           type="button"
-          className="theme-toggle"
+          className="btn btn-icon"
           onClick={onToggleTheme}
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          aria-label={`Switch to ${other} theme`}
+          title={`Switch to ${other} theme`}
         >
-          <Icon name={theme === "dark" ? "sun" : "moon"} size={20} />
-          {theme === "dark" ? "Light" : "Dark"}
+          <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
       </div>
     </header>

@@ -13,6 +13,8 @@
     "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "recharts": "^3.10.1"

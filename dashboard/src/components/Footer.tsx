@@ -2,7 +2,7 @@ import { formatDate } from "../lib/format";
 import type { Status } from "../types";
 
 export function Footer({ status }: { status: Status | null }) {
-  if (!status) return <footer className="footer muted">Not connected to the backend yet.</footer>;
+  if (!status) return <footer className="footer">Not connected to the backend yet.</footer>;
   const source = [
     status.source ?? "no source",
     status.scenario && `scenario ${status.scenario}`,
@@ -11,7 +11,7 @@ export function Footer({ status }: { status: Status | null }) {
   ].filter(Boolean).join(", ");
   const model = status.model;
   return (
-    <footer className="footer muted">
+    <footer className="footer num">
       <span>Source: {source}</span>
       <span>Serial port: {status.serial_port ?? "none"}</span>
       <span>Rows received: {status.rows_received} · rejected: {status.rows_rejected}</span>
@@ -20,7 +20,7 @@ export function Footer({ status }: { status: Status | null }) {
         {model.provisional && " (provisional)"}
       </span>
       {status.registry_warnings.length > 0 && (
-        <span className="tone-text-warning">Registry warnings: {status.registry_warnings.join("; ")}</span>
+        <span className="text-warning">Registry warnings: {status.registry_warnings.join("; ")}</span>
       )}
     </footer>
   );

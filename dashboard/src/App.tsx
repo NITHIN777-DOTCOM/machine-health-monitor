@@ -14,6 +14,7 @@ import { enabledSensors } from "./lib/cards";
 import { linkView, modeView } from "./lib/format";
 
 const DEFAULT_HOLD_S = 5;
+const HEALTH_LINES = [{ y: 50, label: "anomaly 50", kind: "crit" as const }];
 
 /** Why the data on screen may be old; null when it is current. */
 function connectionNotice(d: DashboardData): string | null {
@@ -48,7 +49,7 @@ export default function App() {
       <TopBar mode={mode} link={link} theme={theme} onToggleTheme={toggleTheme} />
       {notice && (
         <div className={`notice ${link.stale ? "notice-bad" : ""}`} role="status" data-testid="notice">
-          <Icon name={link.icon} size={22} />
+            <Icon name={link.icon} />
           {notice}
         </div>
       )}
@@ -60,7 +61,7 @@ export default function App() {
           <ForecastPanel analysis={d.analysis} registry={d.registry} />
         </div>
         <SensorCards registry={d.registry} row={d.row} />
-        <TrendCharts sensors={sensors} points={d.points} />
+        <TrendCharts sensors={sensors} points={d.points} healthLines={HEALTH_LINES} />
       </main>
       <Footer status={d.status} />
     </div>

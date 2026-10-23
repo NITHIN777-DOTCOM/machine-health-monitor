@@ -8,7 +8,10 @@ export function ForecastPanel({ analysis, registry }: { analysis: Analysis | nul
   const name = (key: string) => registry?.sensors.find((s) => s.key === key)?.display_name ?? key;
   return (
     <section className="card" aria-labelledby="fc-title">
-      <h2 id="fc-title">Forecast (trend of the last minute)</h2>
+      <div className="card-head">
+        <h2 id="fc-title">Forecast</h2>
+        <span className="xs muted">trend of the last minute</span>
+      </div>
       {entries.length === 0 ? (
         <p className="muted">No sensor has a forecast.</p>
       ) : (
@@ -16,11 +19,13 @@ export function ForecastPanel({ analysis, registry }: { analysis: Analysis | nul
           {entries.map(([key, f]) => {
             const tone = forecastTone(f);
             return (
-              <li key={key} className={`forecast-item tone-border-${tone}`} data-status={f.status}>
-                <Icon name={trendIcon(f.trend)} size={28} className={`tone-text-${tone}`} />
+              <li key={key} className="forecast-item" data-status={f.status}>
+                <Icon name={trendIcon(f.trend)} size={16} className={`text-${tone}`} />
                 <div>
-                  <div className="forecast-text">{forecastText(name(key), f)}</div>
-                  <div className="muted small">
+                  <div className={`forecast-text ${tone === "warning" || tone === "critical" ? `text-${tone}` : ""}`}>
+                    {forecastText(name(key), f)}
+                  </div>
+                  <div className="xs muted num">
                     trend: {f.trend ?? "not enough data yet"}
                     {f.r2 != null && ` · fit R² ${f.r2.toFixed(2)}`}
                   </div>
@@ -30,7 +35,7 @@ export function ForecastPanel({ analysis, registry }: { analysis: Analysis | nul
           })}
         </ul>
       )}
-      <p className="muted small">Advice only: the forecast never changes the status.</p>
+      <p className="card-note">Advice only: the forecast never changes the status.</p>
     </section>
   );
 }

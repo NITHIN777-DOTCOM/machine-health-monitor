@@ -17,10 +17,10 @@ const ml = (over: Partial<MlBlock>): MlBlock => ({
 
 describe("stateView", () => {
   it("gives every state a label, an icon and a tone (never colour alone)", () => {
-    expect(stateView("NORMAL")).toEqual({ label: "NORMAL", icon: "ok", tone: "normal" });
-    expect(stateView("WARNING")).toEqual({ label: "WARNING", icon: "warning", tone: "warning" });
-    expect(stateView("CRITICAL")).toEqual({ label: "CRITICAL", icon: "critical", tone: "critical" });
-    expect(stateView(null).label).toBe("NO DATA");
+    expect(stateView("NORMAL")).toEqual({ label: "Normal", icon: "ok", tone: "normal" });
+    expect(stateView("WARNING")).toEqual({ label: "Warning", icon: "warning", tone: "warning" });
+    expect(stateView("CRITICAL")).toEqual({ label: "Critical", icon: "critical", tone: "critical" });
+    expect(stateView(null).label).toBe("No data");
   });
 
   it("labels the alert source chip", () => {
@@ -117,14 +117,14 @@ describe("forecastText", () => {
 describe("mlView", () => {
   it("maps every ML status to a label", () => {
     expect(mlView(ml({})).label).toBe("OK");
-    expect(mlView(ml({ status: "ANOMALY", health: 30 })).label).toBe("ANOMALY");
+    expect(mlView(ml({ status: "ANOMALY", health: 30 })).label).toBe("Anomaly");
     expect(mlView(ml({ status: "ANOMALY", clear_remaining_s: 3 })).detail).toBe("clearing in 3 s");
-    expect(mlView(ml({ status: "WARMING_UP", health: null, warmup_remaining_s: 6.2 }))).toMatchObject({ label: "WARMING UP", detail: "7 s left" });
-    expect(mlView(ml({ settling_remaining_s: 4, health: null })).label).toBe("SETTLING");
-    expect(mlView(ml({ status: "ML_UNAVAILABLE", message: "Temperature: too many missing values" }))).toMatchObject({ label: "ML UNAVAILABLE", detail: "Temperature: too many missing values" });
-    expect(mlView(ml({ status: "NO_MODEL" })).label).toBe("NO MODEL");
-    expect(mlView(ml({ status: "NEEDS_RETRAIN" })).label).toBe("NEEDS RETRAIN");
-    expect(mlView(null).label).toBe("NO DATA");
+    expect(mlView(ml({ status: "WARMING_UP", health: null, warmup_remaining_s: 6.2 }))).toMatchObject({ label: "Warming up", detail: "7 s left" });
+    expect(mlView(ml({ settling_remaining_s: 4, health: null })).label).toBe("Settling");
+    expect(mlView(ml({ status: "ML_UNAVAILABLE", message: "Temperature: too many missing values" }))).toMatchObject({ label: "ML unavailable", detail: "Temperature: too many missing values" });
+    expect(mlView(ml({ status: "NO_MODEL" })).label).toBe("No model");
+    expect(mlView(ml({ status: "NEEDS_RETRAIN" })).label).toBe("Needs retrain");
+    expect(mlView(null).label).toBe("No data");
   });
 
   it("bands health around the 50 threshold", () => {

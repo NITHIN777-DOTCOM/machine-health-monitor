@@ -10,7 +10,8 @@ import type {
 /** Icon names drawn by components/Icon.tsx. */
 export type IconName =
   | "ok" | "warning" | "critical" | "info" | "pulse" | "clock" | "off" | "spark"
-  | "up" | "down" | "flat" | "plug" | "sun" | "moon" | "dot";
+  | "up" | "down" | "flat" | "plug" | "sun" | "moon" | "settings" | "play" | "pause" | "stop"
+  | "record" | "file" | "sim" | "loop" | "close";
 
 /** A colour tone: maps to CSS variables --tone-<tone>-bg / -fg / -line. */
 export type Tone = "normal" | "warning" | "critical" | "ml" | "neutral" | "info";
@@ -24,14 +25,14 @@ export interface View {
 // ---- device / overall state -----------------------------------------------------------
 
 const STATE_VIEWS: Record<DevState, View> = {
-  NORMAL: { label: "NORMAL", icon: "ok", tone: "normal" },
-  WARNING: { label: "WARNING", icon: "warning", tone: "warning" },
-  CRITICAL: { label: "CRITICAL", icon: "critical", tone: "critical" },
+  NORMAL: { label: "Normal", icon: "ok", tone: "normal" },
+  WARNING: { label: "Warning", icon: "warning", tone: "warning" },
+  CRITICAL: { label: "Critical", icon: "critical", tone: "critical" },
 };
 
 /** State -> label, icon and colour tone. State is never shown by colour alone. */
 export function stateView(state: DevState | null | undefined): View {
-  return state ? STATE_VIEWS[state] : { label: "NO DATA", icon: "dot", tone: "neutral" };
+  return state ? STATE_VIEWS[state] : { label: "No data", icon: "clock", tone: "neutral" };
 }
 
 const ALERT_SOURCE_LABELS: Record<AlertSource, string | null> = {
@@ -123,28 +124,28 @@ export interface MlView extends View {
 
 /** ML block -> label, icon, tone and a short detail line. */
 export function mlView(ml: MlBlock | null | undefined): MlView {
-  if (!ml) return { label: "NO DATA", icon: "dot", tone: "neutral", detail: null };
+  if (!ml) return { label: "No data", icon: "clock", tone: "neutral", detail: null };
   if (ml.settling_remaining_s != null) {
-    return { label: "SETTLING", icon: "clock", tone: "info", detail: `${ml.settling_remaining_s} s left (after warm start)` };
+    return { label: "Settling", icon: "clock", tone: "info", detail: `${ml.settling_remaining_s} s left (after warm start)` };
   }
   switch (ml.status) {
     case "OK":
       return { label: "OK", icon: "ok", tone: "normal", detail: "pattern looks normal" };
     case "ANOMALY":
       return {
-        label: "ANOMALY", icon: "spark", tone: "ml",
+        label: "Anomaly", icon: "spark", tone: "ml",
         detail: ml.clear_remaining_s != null ? `clearing in ${ml.clear_remaining_s} s` : "pattern differs from normal",
       };
     case "WARMING_UP": {
       const s = ml.warmup_remaining_s;
-      return { label: "WARMING UP", icon: "clock", tone: "info", detail: s != null ? `${Math.ceil(s)} s left` : null };
+      return { label: "Warming up", icon: "clock", tone: "info", detail: s != null ? `${Math.ceil(s)} s left` : null };
     }
     case "ML_UNAVAILABLE":
-      return { label: "ML UNAVAILABLE", icon: "off", tone: "neutral", detail: ml.message };
+      return { label: "ML unavailable", icon: "off", tone: "neutral", detail: ml.message };
     case "NO_MODEL":
-      return { label: "NO MODEL", icon: "off", tone: "neutral", detail: ml.message ?? "rules only" };
+      return { label: "No model", icon: "off", tone: "neutral", detail: ml.message ?? "rules only" };
     case "NEEDS_RETRAIN":
-      return { label: "NEEDS RETRAIN", icon: "off", tone: "neutral", detail: ml.message ?? "sensor list changed; rules only" };
+      return { label: "Needs retrain", icon: "off", tone: "neutral", detail: ml.message ?? "sensor list changed; rules only" };
   }
 }
 

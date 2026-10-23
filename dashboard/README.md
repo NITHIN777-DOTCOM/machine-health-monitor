@@ -1,12 +1,16 @@
-# Dashboard (Phase 4)
+# Dashboard (Phase 5)
 
 React + TypeScript (strict) single page that shows what the backend sees: the overall
 status, the device rules, the ML opinion, every sensor, 5-minute trends and the forecast.
-It is built for a classroom projector: big text, high contrast, light and dark themes, and
-every state is shown as **text + icon**, never by colour alone.
+The look follows the ISA-101 "high-performance HMI" idea: **neutral and calm while
+everything is normal, colour only for abnormal states**. Palette #222831 / #393E46 /
+#00ADB5 / #EEEEEE (dark and light themes); status colours (normal, warning, critical,
+ML anomaly) are separate tokens used only for status. Every state is shown as
+**text + icon**, never by colour alone. `node scripts/contrast.mjs` checks every token pair
+against WCAG AA in both themes.
 
-It works fully offline: no CDN, no web fonts (system fonts only), charts with Recharts
-bundled in.
+It works fully offline: no CDN; the Inter font (`@fontsource/inter`), the icons
+(`lucide-react`) and Recharts are bundled in.
 
 ## Run it (development)
 
@@ -48,8 +52,8 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 
 ## What is on the page
 
-1. **Top bar**: mode badge **LIVE / RECORDED / SIMULATED** (from the newest row's `mode`;
-   simulated is also striped), connection indicator (the backend's `link` field: starting,
+1. **Top bar**: title + course subtitle, a flat outlined mode badge **LIVE / RECORDED /
+   SIMULATED** with a small dot (from the newest row's `mode`), connection indicator (the backend's `link` field: starting,
    ok, no_data, down, finished), theme toggle (default follows the OS; the choice is kept in
    `localStorage`).
 2. **Status banner**: `analysis.overall`, the headline and a chip for `alert_source`
@@ -96,5 +100,7 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 | `src/lib/cards.ts` | Sensor cards from the registry |
 | `src/lib/buffer.ts` | 5-minute trend buffer |
 | `src/components/` | One file per part of the page |
-| `src/styles.css` | All styles; theme colours are CSS variables at the top |
+| `src/lib/grid.ts` | Chart grid: columns that fit, last chart stretched so no row has a gap |
+| `src/styles.css` | All styles; colour, spacing and type tokens are CSS variables at the top |
+| `scripts/contrast.mjs` | WCAG contrast check of the colour tokens (both themes) |
 | `scripts/screenshots.mjs` | Playwright screenshot run |

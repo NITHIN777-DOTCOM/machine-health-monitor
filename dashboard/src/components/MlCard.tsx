@@ -7,31 +7,32 @@ export function MlCard({ ml }: { ml: MlBlock | null }) {
   const view = mlView(ml);
   const health = ml?.health ?? null;
   const tone = healthTone(health);
+  // Calm when healthy: the bar and number only take a status colour below the clear level.
+  const abnormal = tone === "warning" || tone === "ml";
   return (
     <section className="card" aria-labelledby="ml-title" data-ml-status={ml?.status ?? "NONE"}>
-      <h2 id="ml-title">
-        ML anomaly detection
+      <div className="card-head">
+        <h2 id="ml-title">ML anomaly detection</h2>
         {ml?.provisional && (
-          <span className="tag" title="The model was trained on simulated data only; it must be retrained on real recordings">
-            provisional model (trained on simulated data)
+          <span className="provisional" title="The model was trained on simulated data only; it must be retrained on real recordings">
+            provisional model
           </span>
         )}
-      </h2>
+      </div>
       <div className="ml-top">
         <div>
-          <div className={`state-pill tone-${view.tone}`}>
-            <Icon name={view.icon} size={28} />
+          <div className={`state-line text-${view.tone === "normal" ? "normal" : view.tone}`}>
+            <Icon name={view.icon} size={20} />
             {view.label}
           </div>
-          {view.detail && <p className="muted small">{view.detail}</p>}
+          {view.detail && <p className="small muted">{view.detail}</p>}
         </div>
         <div className="health">
-          <div className="health-label">Health</div>
-          <div className={`health-value tone-text-${tone}`} data-testid="health">
+          <div className={`health-value ${abnormal ? `text-${tone}` : ""}`} data-testid="health">
             {health == null ? "-" : Math.round(health)}
             <span className="health-max">/100</span>
           </div>
-          <div className="small muted">{healthLabel(health)}</div>
+          <div className="xs muted">health · {healthLabel(health)}</div>
         </div>
       </div>
       <div
@@ -42,11 +43,11 @@ export function MlCard({ ml }: { ml: MlBlock | null }) {
         aria-valuenow={health ?? undefined}
         aria-label="ML health score"
       >
-        <div className={`health-fill tone-${tone}`} style={{ width: `${health ?? 0}%` }} />
+        <div className={`health-fill ${abnormal ? `fill-${tone}` : ""}`} style={{ width: `${health ?? 0}%` }} />
         <div className="health-mark" style={{ left: "50%" }} title="50 = anomaly threshold" />
       </div>
-      <div className="causes">
-        <span className="muted small">Biggest differences from normal:</span>
+      <div className="causes small">
+        <span className="muted">Biggest differences from normal</span>
         {ml && ml.causes.length ? (
           <ul>
             {ml.causes.slice(0, 2).map((c) => (
@@ -54,7 +55,7 @@ export function MlCard({ ml }: { ml: MlBlock | null }) {
             ))}
           </ul>
         ) : (
-          <span className="small"> none (no score)</span>
+          <p className="muted">None (no score yet)</p>
         )}
       </div>
     </section>

@@ -3,7 +3,8 @@ import { stateView } from "../lib/format";
 import type { Registry, RowDict } from "../types";
 import { Icon } from "./Icon";
 
-/** One card per enabled sensor; disabled ones in a compact "Not connected" row. */
+/** One card per enabled sensor; disabled ones in a compact "Not connected" line. A card
+ *  stays neutral while its value is normal and gets a status bar only when it is not. */
 export function SensorCards({ registry, row }: { registry: Registry | null; row: RowDict | null }) {
   const { cards, notConnected } = buildSensorCards(registry, row);
   return (
@@ -14,42 +15,45 @@ export function SensorCards({ registry, row }: { registry: Registry | null; row:
           return (
             <article
               key={c.key}
-              className={`sensor-card ${view ? `tone-border-${view.tone}` : "tone-border-critical sensor-fault"}`}
+              className="sensor-card"
               data-sensor={c.key}
               data-status={c.status}
+              data-level={c.level ?? undefined}
               title={`${c.hardware}${c.limitsNote ? ` - limits: ${c.limitsNote}` : ""}`}
             >
-              <div className="sensor-name">{c.name}</div>
-              {c.status === "ok" && view ? (
-                <>
-                  <div className="sensor-value">
-                    {c.value}
-                    <span className="sensor-unit">{c.unit}</span>
-                  </div>
-                  <div className={`sensor-level tone-text-${view.tone}`}>
-                    <Icon name={view.icon} size={18} />
+              <div className="sensor-head">
+                <span className="sensor-name">{c.name}</span>
+                {view && (
+                  <span className={`sensor-level ${c.level === "NORMAL" ? "muted" : `text-${view.tone}`}`}>
+                    {c.level !== "NORMAL" && <Icon name={view.icon} />}
                     {view.label}
-                  </div>
-                </>
+                  </span>
+                )}
+              </div>
+              {c.status === "ok" ? (
+                <div className="sensor-value">
+                  {c.value}
+                  <span className="sensor-unit">{c.unit}</span>
+                </div>
               ) : c.status === "fault" ? (
-                <div className="sensor-fault-text tone-text-critical">
-                  <Icon name="warning" size={22} />
+                <div className="sensor-fault-text text-critical">
+                  <Icon name="warning" size={20} />
                   No reading - sensor fault
                 </div>
               ) : (
                 <div className="sensor-value muted">-</div>
               )}
-              <div className="sensor-limits muted">
+              <div className="sensor-limits">
                 {c.limits}
-                {c.limitsNote && <span className="provisional-mark" title={c.limitsNote}> (provisional)</span>}
+                {c.limitsNote && <span title={c.limitsNote}> (provisional)</span>}
               </div>
             </article>
           );
         })}
       </div>
       {notConnected.length > 0 && (
-        <p className="not-connected muted">
-          <Icon name="plug" size={18} /> Not connected: {notConnected.map((s) => s.display_name).join(" · ")}
+        <p className="not-connected">
+          <Icon name="plug" /> Not connected: {notConnected.map((s) => s.display_name).join(" · ")}
         </p>
       )}
     </section>
