@@ -70,6 +70,12 @@ until we have real recordings):
 | `sudden_fault` | At a random time 20–60 s in, vibration (+60) and sound (+120) jump past their limits → WARNING/CRITICAL. | `fault` after the jump |
 | `slow_drift`   | From 10 s, temperature rises by +6 °C over 4 minutes (~29.5 → ~35.5 °C), crossing 32 °C (WARNING) then 35 °C (CRITICAL); vibration slowly rises. | `fault` after it starts |
 | `sensor_fault` | At a random time 20–60 s in, the DHT11 stops responding (temp and humidity go empty → WARNING). | `unknown` after it starts (a dead sensor is not a machine fault, so ML must not learn it) |
+| `recovery`     | Normal for 20 s, vibration and sound jump past critical for 30 s, then return to normal. Shows CRITICAL → WARNING → NORMAL with the hold countdown. **Best demo of the state machine.** | `fault` during the fault window, `normal` before and after |
+| `drift_and_recover` | From 10 s, temperature drifts +7 °C over 2 min (past 32 and 35), stays hot 1 min, cools back over 2 min. | `fault` from the drift start until cooled |
+
+Scenario timing is set per scenario in `sim_profile.json`: `start_s` (random range),
+`ramp_s` (rise time), `duration_s` (time from start until recovery begins; omit to keep
+the fault forever) and `recover_s` (fall time).
 
 Disabled sensors (in `sensors.json`) are always empty, exactly like the real device.
 All simulated values are clamped to each sensor's physical range (`physical_min` /
@@ -133,6 +139,40 @@ auto-detection.
 `reason` / `reasons` (which sensor and limit), `clearing`, `hold_remaining_s`,
 `last_change`, `device_reported` (the row's own `dev_state`) and `agrees`. Rules:
 [DATA_CONTRACT.md section 3](../docs/DATA_CONTRACT.md#dev_state-device-side-rules).
+
+## Watching the stream: `ws_peek.py`
+
+With the backend running, print rows from the WebSocket in a compact table:
+
+```
+python scripts/ws_peek.py -n 30            # 30 rows
+python scripts/ws_peek.py --changes -n 15  # only rows where the state or hold timer changes
+```
+
+Example (`recovery` scenario at 5x):
+
+```
+     t  temp   hum sound  vib  dev_state mirror    hold  label   reason
+    20  28.5  61.9   124   81  CRITICAL  CRITICAL     -  fault   Sound level (peak deviation) 124 >= crit 120; Vibration 81 >= crit 60
+    50  28.5  59.5     5    5  CRITICAL  CRITICAL     4  normal  recovering, was: ...
+    53  29.1  59.8     6    1  CRITICAL  CRITICAL     1  normal  recovering, was: ...
+    54  28.6  59.3     4    3  WARNING   WARNING      5  normal  recovering, was: ...
+    58  28.7    56     6    3  WARNING   WARNING      1  normal  recovering, was: ...
+    59  28.8  59.4     6    3  NORMAL    NORMAL       -  normal
+```
+
+## Tests
+
+```
+scripts\run_tests.bat                 (Windows, from anywhere)
+python -m pytest                      (from backend/, venv active)
+python -m pytest tests/test_device_rules.py -v
+```
+
+No hardware is needed: the serial tests use a fake port and mocked port lists, and the
+simulator is stepped directly. `run_tests.bat` also prints coverage per module.
+`test_device_rules.py` reads the worked example table from `docs/DATA_CONTRACT.md` and
+checks it against the code, so the docs and the state machine can't drift apart.
 
 ## Code map
 

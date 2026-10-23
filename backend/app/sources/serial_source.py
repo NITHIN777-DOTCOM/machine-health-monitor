@@ -113,9 +113,9 @@ class SerialSource(Source):
                         first = False  # may be a partial line from before we started reading
                         continue
                     first = False
-                    row = parse_line(line, self.registry, self.stats,
-                                     mode="live", source="real", label=self.label_getter())
+                    row = parse_line(line, self.registry, self.stats, mode="live", source="real")
                     if row is not None:
+                        row.label = self.label_getter()
                         yield row
             except (serial.SerialException, OSError) as exc:
                 log.warning("Serial connection on %s lost: %s", port, exc)

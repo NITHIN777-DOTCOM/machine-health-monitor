@@ -56,6 +56,8 @@ class SimulatorSource(Source):
         lo, hi = sc.get("start_s", [0, 0])
         self.fault_start_s = self.rng.uniform(lo, hi) if sc.get("effects") else None
         self.ramp_s = float(sc.get("ramp_s", 0)) or None
+        self.duration_s = float(sc["duration_s"]) if sc.get("duration_s") is not None else None
+        self.recover_s = float(sc.get("recover_s", 0)) or None
         self._phase_offsets = {k: self.rng.uniform(0, 2 * math.pi) for k in self.profile["sensors"]}
 
     # ---- value generation --------------------------------------------------------
@@ -67,30 +69,65 @@ class SimulatorSource(Source):
         v += self.rng.gauss(0, cfg.get("noise", 0.0))
         return min(max(v, cfg.get("min", -math.inf)), cfg.get("max", math.inf))
 
-    @property
-    def _progress(self) -> float:
-        """0 -> 1 over ramp_s after the fault starts (1 immediately if there is no ramp)."""
-        since = self.elapsed_s - (self.fault_start_s or 0)
-        return min(1.0, since / self.ramp_s) if self.ramp_s else 1.0
+    # ---- fault window ----------------------------------------------------------------
+    # A scenario's fault starts at fault_start_s. Its strength ("envelope", 0..1) rises
+    # over ramp_s (instantly if no ramp), stays at full until duration_s after the start
+    # (forever if no duration_s), then falls back to 0 over recover_s (instantly if none).
+    # The fault window (label "fault", empty fields, ...) lasts until the envelope is 0.
 
-    def _apply_effect(self, value: float, cfg: dict[str, Any], effect: dict[str, Any]) -> float | None:
-        """Effects: empty, add, ramp_add, ramp_to, noise. ('steady' is handled in _baseline.)"""
-        if effect.get("empty"):
+    @property
+    def _since_start(self) -> float | None:
+        if self.fault_start_s is None or self.elapsed_s < self.fault_start_s:
             return None
-        progress = self._progress
-        if "add" in effect:
-            value += effect["add"]
-        if "ramp_add" in effect:
-            value += effect["ramp_add"] * progress
-        if "ramp_to" in effect:
-            value += (effect["ramp_to"] - cfg.get("mean", value)) * progress
-        if "noise" in effect:
-            value += self.rng.gauss(0, effect["noise"])
-        return value
+        return self.elapsed_s - self.fault_start_s
+
+    def _rise(self, since: float) -> float:
+        return min(1.0, since / self.ramp_s) if self.ramp_s else 1.0
 
     @property
     def fault_active(self) -> bool:
-        return self.fault_start_s is not None and self.elapsed_s >= self.fault_start_s
+        """True from the fault start until the values have fully returned to baseline."""
+        since = self._since_start
+        if since is None:
+            return False
+        if self.duration_s is None:
+            return True
+        return since < self.duration_s + (self.recover_s or 0.0)
+
+    @property
+    def recovering(self) -> bool:
+        since = self._since_start
+        return self.fault_active and self.duration_s is not None and since is not None and since >= self.duration_s
+
+    @property
+    def _envelope(self) -> float:
+        since = self._since_start
+        if since is None or not self.fault_active:
+            return 0.0
+        if self.duration_s is None or since < self.duration_s:
+            return self._rise(since)
+        peak = self._rise(self.duration_s)
+        return peak * (1.0 - (since - self.duration_s) / self.recover_s) if self.recover_s else 0.0
+
+    def _apply_effect(self, value: float, cfg: dict[str, Any], effect: dict[str, Any]) -> float | None:
+        """Effects: empty, add, ramp_add, ramp_to, noise. ('steady' is handled in _baseline.)
+
+        'add' is a step: full strength from the start until recovery begins, then it fades
+        with the envelope. 'ramp_add' / 'ramp_to' follow the envelope throughout.
+        """
+        if effect.get("empty"):
+            return None
+        env = self._envelope
+        step = env if self.recovering else 1.0
+        if "add" in effect:
+            value += effect["add"] * step
+        if "ramp_add" in effect:
+            value += effect["ramp_add"] * env
+        if "ramp_to" in effect:
+            value += (effect["ramp_to"] - cfg.get("mean", value)) * env
+        if "noise" in effect:
+            value += self.rng.gauss(0, effect["noise"]) * step
+        return value
 
     def make_row(self) -> SensorRow:
         effects = self.profile["scenarios"][self.scenario].get("effects", {}) if self.fault_active else {}
@@ -103,7 +140,7 @@ class SimulatorSource(Source):
             effect = effects.get(sensor.key, {})
             # "steady": fade out the slow wander as the ramp progresses, so the ramp ends
             # at mean + ramp_add instead of wherever the wander happens to be.
-            wander_scale = 1.0 - self._progress if effect.get("steady") else 1.0
+            wander_scale = 1.0 - self._envelope if effect.get("steady") else 1.0
             v: float | None = self._baseline(sensor.key, cfg, wander_scale)
             if sensor.key in effects:
                 v = self._apply_effect(v, cfg, effects[sensor.key])
@@ -143,4 +180,5 @@ class SimulatorSource(Source):
             "speed": self.speed,
             "elapsed_s": self.elapsed_s,
             "fault_active": self.fault_active,
+            "recovering": self.recovering,
         }

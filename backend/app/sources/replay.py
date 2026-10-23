@@ -61,6 +61,7 @@ class ReplaySource(Source):
         self.loop = loop
         self.rows_played = 0
         self.passes = 0
+        self._sleep = asyncio.sleep  # replaceable in tests
 
     async def rows(self) -> AsyncIterator[SensorRow]:
         await self._set_status(connected=True, error=None)
@@ -78,7 +79,7 @@ class ReplaySource(Source):
                         self.stats.reject(f"{self.path.name}: {exc}", ",".join(str(v) for v in record.values()))
                         continue
                     if gap:
-                        await asyncio.sleep(gap / self.speed)
+                        await self._sleep(gap / self.speed)
                     self.rows_played += 1
                     yield row.with_meta(mode="recorded", ts_iso=now_iso())
             self.passes += 1

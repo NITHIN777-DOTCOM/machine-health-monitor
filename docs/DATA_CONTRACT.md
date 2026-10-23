@@ -127,7 +127,8 @@ value ≥ limit; for `below`, value ≤ limit.
   clearing.
 - **Reason:** the device remembers which sensor and limit caused the state, e.g.
   `Temperature 35.1 >= crit 35` or `SENSOR FAULT: DHT11`, and the LCD shows it. While
-  counting down, the last reason is kept and the remaining hold time is shown.
+  counting down, the last reason is kept but marked as history
+  (`recovering, was: Temperature 35.1 >= crit 35`), and the remaining hold time is shown.
 
 Hysteresis margins (`hysteresis` in the registry):
 

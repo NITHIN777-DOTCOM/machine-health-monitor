@@ -43,6 +43,28 @@
         "temp_c":   {"empty": true},
         "humidity": {"empty": true}
       }
+    },
+    "recovery": {
+      "description": "Normal for 20 s, then vibration and sound jump past critical for 30 s, then return to normal (CRITICAL -> WARNING -> NORMAL via the hold time).",
+      "start_s": [20, 20],
+      "duration_s": 30,
+      "label_after_start": "fault",
+      "effects": {
+        "vib_count":  {"add": 75,  "noise": 8},
+        "sound_peak": {"add": 150, "noise": 15}
+      }
+    },
+    "drift_and_recover": {
+      "description": "Temperature drifts up +7 C over 120 s (past 32 and 35), stays hot for 60 s, then cools back to baseline over 120 s.",
+      "start_s": [10, 10],
+      "ramp_s": 120,
+      "duration_s": 180,
+      "recover_s": 120,
+      "label_after_start": "fault",
+      "effects": {
+        "temp_c":    {"ramp_add": 7.0, "steady": true},
+        "vib_count": {"ramp_add": 15, "noise": 3}
+      }
     }
   }
 }

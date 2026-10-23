@@ -166,9 +166,13 @@ class DeviceStateMachine:
         return self.hold_seconds - self.hold_count if self.clearing else None
 
     def snapshot(self) -> dict[str, Any]:
+        reason = "; ".join(dict.fromkeys(t.text for t in self.reasons)) or None
+        if reason and self.clearing:
+            # The values are already back; show that the reason is history, not current.
+            reason = f"recovering, was: {reason}"
         return {
             "state": self.state,
-            "reason": "; ".join(dict.fromkeys(t.text for t in self.reasons)) or None,
+            "reason": reason,
             "reasons": [t.to_dict() for t in self.reasons],
             "clearing": self.clearing,
             "hold_remaining_s": self.hold_remaining_s,

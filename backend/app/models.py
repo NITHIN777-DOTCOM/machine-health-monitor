@@ -59,6 +59,11 @@ class SensorRow:
         d = self.to_dict()
         return [_fmt(d.get(col)) for col in stored_columns(registry)]
 
+    def to_device_line(self, registry: Registry) -> str:
+        """The row as the Arduino would send it over serial (device columns only)."""
+        d = self.to_dict()
+        return ",".join(_fmt(d.get(col)) for col in registry.csv_columns)
+
 
 # ---- CSV helpers ---------------------------------------------------------------
 
