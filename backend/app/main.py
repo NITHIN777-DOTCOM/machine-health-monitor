@@ -16,7 +16,7 @@ from .config import load_settings
 from .pipeline import Pipeline
 from .recorder import Recorder, list_recordings
 from .registry import Registry
-from .sources.serial_source import detect_arduino_port, port_exists
+from .sources.serial_source import port_exists, resolve_port
 from .state import AppState, RingBuffer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -35,15 +35,13 @@ def _build_state() -> AppState:
 
 
 def _choose_startup_source(state: AppState) -> tuple[str, str]:
-    port = detect_arduino_port()
-    if port:
-        return "serial", f"Arduino auto-detected on {port}"
-    configured = state.settings.serial_port
-    if configured and port_exists(configured):
-        return "serial", f"no Arduino auto-detected, but configured port {configured} (MHM_PORT/settings.json) exists"
-    if configured:
-        return "simulator", f"no Arduino auto-detected and configured port {configured} is not present; using simulator (normal)"
-    return "simulator", "no Arduino found; using simulator (normal)"
+    """Serial if the port picked by resolve_port() (MHM_PORT > auto > settings) exists."""
+    port, how = resolve_port(state.settings)
+    if port is None:
+        return "simulator", "no Arduino found; using simulator (normal)"
+    if how == "auto-detected" or port_exists(port):
+        return "serial", f"Arduino on {port} ({how})"
+    return "simulator", f"{port} ({how}) is not present; using simulator (normal)"
 
 
 @asynccontextmanager

@@ -2,8 +2,8 @@
   "description": "Simulator baselines and fault scenarios. Values are guesses from docs/DATA_CONTRACT.md; replace with stats from real recordings. Sensor keys must match backend/config/sensors.json.",
   "tick_seconds": 1.0,
   "sensors": {
-    "temp_c":      {"mean": 29.5,  "wander": 1.0,  "wander_period_s": 600, "noise": 0.2,  "min": 28.0, "max": 31.0,  "physical_min": -10, "physical_max": 80,   "decimals": 1},
-    "humidity":    {"mean": 60.0,  "wander": 6.0,  "wander_period_s": 900, "noise": 1.0,  "min": 50.0, "max": 70.0,  "physical_min": 0,   "physical_max": 100,  "decimals": 1},
+    "temp_c":      {"mean": 29.5,  "wander": 1.0,  "wander_period_s": 600, "noise": 0.2,  "min": 28.0, "max": 31.0,  "physical_min": 0,   "physical_max": 50,   "decimals": 1},
+    "humidity":    {"mean": 60.0,  "wander": 6.0,  "wander_period_s": 900, "noise": 1.0,  "min": 50.0, "max": 70.0,  "physical_min": 20,  "physical_max": 90,   "decimals": 1},
     "sound_peak":  {"mean": 5.0,   "wander": 1.0,  "wander_period_s": 120, "noise": 1.2,  "min": 3,    "max": 8,     "physical_min": 0,   "physical_max": 1023, "decimals": 0},
     "vib_count":   {"mean": 2.0,   "wander": 1.0,  "wander_period_s": 90,  "noise": 1.2,  "min": 0,    "max": 5,     "physical_min": 0,   "physical_max": 1000, "decimals": 0},
     "leak_raw":    {"mean": 15.0,  "wander": 3.0,  "wander_period_s": 300, "noise": 2.0,  "min": 5,    "max": 30,    "physical_min": 0,   "physical_max": 1023, "decimals": 0},
@@ -26,19 +26,19 @@
       }
     },
     "slow_drift": {
-      "description": "Temperature climbs gradually past 35 C then 40 C; vibration slowly rises.",
+      "description": "Temperature rises by +6 C over 240 s (~29.5 -> ~35.5 C, crossing 32 then 35); vibration slowly rises.",
       "start_s": [10, 10],
       "ramp_s": 240,
       "label_after_start": "fault",
       "effects": {
-        "temp_c":    {"ramp_to": 43.0},
+        "temp_c":    {"ramp_add": 6.0, "steady": true},
         "vib_count": {"ramp_add": 30, "noise": 4}
       }
     },
     "sensor_fault": {
       "description": "DHT11 stops responding partway through: temp_c and humidity go empty.",
       "start_s": [20, 60],
-      "label_after_start": "fault",
+      "label_after_start": "unknown",
       "effects": {
         "temp_c":   {"empty": true},
         "humidity": {"empty": true}

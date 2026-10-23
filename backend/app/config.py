@@ -1,7 +1,8 @@
 """Paths and runtime settings.
 
-Settings come from backend/config/settings.json; environment variables override them:
-    MHM_PORT   serial port to use if auto-detection finds no Arduino (e.g. COM5)
+Settings come from backend/config/settings.json, plus environment variables:
+    MHM_PORT   serial port to use (e.g. COM5); overrides auto-detection.
+               Port priority: MHM_PORT > auto-detect > settings.json "serial_port".
     MHM_ROOT   project root folder (the one containing backend/, data/, models/)
 """
 from __future__ import annotations
@@ -26,7 +27,8 @@ MODELS_DIR = ROOT_DIR / "models"
 
 @dataclass
 class Settings:
-    serial_port: str | None = None
+    serial_port: str | None = None   # from settings.json; last resort after auto-detect
+    env_port: str | None = None      # from MHM_PORT; overrides auto-detect
     baud: int = 115200
     serial_boot_wait_s: float = 2.0
     reconnect_interval_s: float = 2.0
@@ -41,7 +43,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         for key, value in data.items():
-            if hasattr(settings, key) and key != "recordings_dir":
+            if hasattr(settings, key) and key not in ("recordings_dir", "env_port"):
                 setattr(settings, key, value)
             else:
                 log.warning("settings.json: unknown key %r ignored", key)
@@ -50,7 +52,5 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     except (OSError, ValueError) as exc:
         log.error("Could not read %s (%s), using default settings", path, exc)
 
-    env_port = os.environ.get("MHM_PORT")
-    if env_port:
-        settings.serial_port = env_port
+    settings.env_port = os.environ.get("MHM_PORT", "").strip() or None
     return settings

@@ -43,12 +43,14 @@ def port_exists(port: str) -> bool:
 
 
 def resolve_port(settings: Settings) -> tuple[str | None, str]:
-    """(port, how it was found). Auto-detect first, then the configured port."""
+    """(port, how it was chosen). Priority: MHM_PORT > auto-detect > settings.json."""
+    if settings.env_port:
+        return settings.env_port, "MHM_PORT environment variable"
     port = detect_arduino_port()
     if port:
         return port, "auto-detected"
     if settings.serial_port:
-        return settings.serial_port, "from MHM_PORT / settings.json"
+        return settings.serial_port, "settings.json serial_port"
     return None, "not found"
 
 
@@ -77,6 +79,7 @@ class SerialSource(Source):
             port, how = resolve_port(self.settings)
             if port != self.port:
                 self.port, self.port_how = port, how
+                log.info("Serial port: %s (%s)", port, how)
                 if self.on_change:
                     await self.on_change()
             if port is None:

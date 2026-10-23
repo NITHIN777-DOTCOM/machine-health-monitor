@@ -89,18 +89,22 @@ All limits below are `above`.
 
 | Sensor       | WARNING at | CRITICAL at |
 |--------------|-----------|-------------|
-| `temp_c`     | ≥ 35 °C   | ≥ 40 °C     |
-| `humidity`   | TBD       | TBD         |
-| `sound_peak` | TBD       | TBD         |
-| `vib_count`  | TBD       | TBD         |
+| `temp_c`     | ≥ 32 °C   | ≥ 35 °C     |
+| `humidity`   | ≥ 80 %RH  | ≥ 90 %RH    |
+| `sound_peak` | ≥ 40      | ≥ 120       |
+| `vib_count`  | ≥ 20 /s   | ≥ 60 /s     |
 | `leak_raw`   | TBD       | TBD         |
 | `distance_cm`| TBD       | TBD         |
 | `current_ma` | TBD       | TBD         |
 | `bus_v`      | TBD       | TBD         |
 
-TBD limits will be set after recording real data. The same numbers live in
+**The core-sensor limits are provisional demo limits** (each has a `limits_note` in the
+registry). They are low on purpose so a live bench demo can trigger them: a finger on the
+DHT11 gives about 32–33 °C (WARNING), a few taps pass 20 vibration edges/s, and a clap
+passes a sound peak of 40. They will be retuned from real recordings in Phase 8. TBD
+limits will be set once the optional sensors are fitted. The same numbers live in
 `backend/config/sensors.json` (`warn` / `critical`) and must be kept in sync with the
-firmware by hand.
+firmware by hand. See section 8 before using any of these limits on a real machine.
 
 ## 4. Example lines
 
@@ -109,13 +113,14 @@ Header plus three data lines:
 ```
 # ms,temp_c,humidity,sound_peak,vib_count,leak_raw,distance_cm,current_ma,bus_v,dev_state
 12000,29.0,62.0,4,0,18,41.3,182.4,4.98,NORMAL
-13000,36.0,61.0,212,47,,,,,WARNING
+13000,33.0,61.0,12,3,,,,,WARNING
 14000,,,5,0,,,,,WARNING
 ```
 
 1. **All sensors present** (`12000`): every field filled, everything inside limits.
 2. **Core sensors only** (`13000`): leak, ultrasonic and INA219 are not fitted, so their
-   four fields are empty. Temperature 36 °C is above the 35 °C warning limit → `WARNING`.
+   four fields are empty. Temperature 33 °C is at or above the 32 °C warning limit but
+   below the 35 °C critical limit; sound and vibration are below their limits → `WARNING`.
 3. **Failed core sensor** (`14000`): the DHT11 read failed (timeout/checksum), so
    `temp_c` and `humidity` are empty, not 0. Sound and vibration are normal, but because
    an enabled core sensor failed, the sensor-fault rule raises `dev_state` to `WARNING`
@@ -185,6 +190,7 @@ Fields of each sensor entry:
 | `enabled`       | boolean         | Whether this sensor is fitted in the current build. `false` → dashboard shows "not connected". |
 | `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled; see section 6). |
 | `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
+| `limits_note`   | string, optional | Where the limits come from, e.g. "provisional demo limit - retune from real data in Phase 8". The dashboard can show it next to the limits. |
 | `comment`       | string, optional | Free-text note for humans; ignored by the software. |
 
 Current state: the four core values are enabled; leak, ultrasonic and INA219 are
@@ -214,3 +220,19 @@ Adding a **brand-new kind** of sensor (a column that does not exist yet) is a co
 change: add the column to section 3 and to `csv_columns`, add a registry entry, and
 update the firmware to print it. New columns go at the end of the line so old
 recordings stay readable.
+
+## 8. Deployment on real machinery
+
+All limits and the ML model in this project are **tuned for a bench demo**: a DHT11
+warmed by a finger, taps and claps near the sensors, and a quiet desk. They say nothing
+about what is normal for any real machine.
+
+Deploying the monitor on an actual machine requires:
+
+1. **Recording that machine's own normal operation** (`mode=live`, `label=normal`) over
+   enough time to cover its usual load, speed and temperature changes.
+2. **Re-deriving the limits** (`warn` / `critical` in `sensors.json` and the matching
+   firmware constants) from that recording.
+3. **Retraining the ML model** on that machine's data.
+
+**The demo limits and the demo model must not be reused as-is on real equipment.**

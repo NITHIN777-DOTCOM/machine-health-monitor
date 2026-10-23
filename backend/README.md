@@ -67,11 +67,13 @@ until we have real recordings):
 | Scenario       | What happens | Label |
 |----------------|--------------|-------|
 | `normal`       | Healthy baseline values. | `normal` |
-| `sudden_fault` | At a random time 20–60 s in, vibration and sound jump up. | `fault` after the jump |
-| `slow_drift`   | From 10 s, temperature climbs over 4 minutes past 35 °C (WARNING) and 40 °C (CRITICAL); vibration slowly rises. | `fault` after it starts |
-| `sensor_fault` | At a random time 20–60 s in, the DHT11 stops responding (temp and humidity go empty → WARNING). | `fault` after it starts |
+| `sudden_fault` | At a random time 20–60 s in, vibration (+60) and sound (+120) jump past their limits → WARNING/CRITICAL. | `fault` after the jump |
+| `slow_drift`   | From 10 s, temperature rises by +6 °C over 4 minutes (~29.5 → ~35.5 °C), crossing 32 °C (WARNING) then 35 °C (CRITICAL); vibration slowly rises. | `fault` after it starts |
+| `sensor_fault` | At a random time 20–60 s in, the DHT11 stops responding (temp and humidity go empty → WARNING). | `unknown` after it starts (a dead sensor is not a machine fault, so ML must not learn it) |
 
 Disabled sensors (in `sensors.json`) are always empty, exactly like the real device.
+All simulated values are clamped to each sensor's physical range (`physical_min` /
+`physical_max`; the DHT11 is 0–50 °C and 20–90 %RH).
 `dev_state` is computed by `app/device_rules.py`, the same rules as the Arduino.
 
 ## Recording and labelling
@@ -91,8 +93,17 @@ curl -X POST http://127.0.0.1:8000/api/record/stop
 ## Choosing the serial port: `MHM_PORT`
 
 Normally you don't need this: the backend auto-detects the Arduino (genuine Uno by its
-USB vendor ID, clones by "CH340" / "USB-SERIAL" in the name). If auto-detection fails,
-set the port yourself before starting:
+USB vendor ID, clones by "CH340" / "USB-SERIAL" in the name). The port is chosen in this
+order:
+
+1. **`MHM_PORT` environment variable**: if set, it **overrides** auto-detection.
+2. **Auto-detection.**
+3. **`"serial_port"` in [`config/settings.json`](config/settings.json)**: used only when
+   `MHM_PORT` is not set and auto-detection finds nothing.
+
+The log says which one was used (e.g. `Serial port: COM5 (MHM_PORT environment variable)`),
+and `/api/status` shows it under `source_detail.port_found`. Set `MHM_PORT` before
+starting the backend:
 
 ```
 set MHM_PORT=COM5            (Windows cmd)
@@ -100,8 +111,8 @@ $env:MHM_PORT = "COM5"       (PowerShell)
 export MHM_PORT=/dev/ttyACM0 (macOS/Linux)
 ```
 
-or put `"serial_port": "COM5"` in [`config/settings.json`](config/settings.json). The
-configured port is used only when auto-detection finds nothing.
+Use it to force a specific board (e.g. two Arduinos plugged in). Unset it to go back to
+auto-detection.
 
 ## API summary
 

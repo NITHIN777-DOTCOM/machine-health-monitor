@@ -54,6 +54,14 @@ flowchart LR
   rule, stored columns, sensor registry and how to add or remove a sensor.
 - [`firmware/README.md`](firmware/README.md): wiring and how to flash the Arduino.
 
+## Deployment on real machinery
+
+All limits and the ML model in this project are **tuned for a bench demo** (finger on
+the DHT11, taps and claps near the sensors). Deploying on an actual machine requires
+recording that machine's own normal-operation data, re-deriving the limits from it, and
+retraining the model. **The demo limits and model must not be reused as-is.** Details:
+[`docs/DATA_CONTRACT.md` section 8](docs/DATA_CONTRACT.md#8-deployment-on-real-machinery).
+
 ## Tested with
 
 Checked on 2026-10-23 on Windows 11 Home (10.0.26200):

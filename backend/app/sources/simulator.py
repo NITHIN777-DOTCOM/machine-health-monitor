@@ -56,19 +56,25 @@ class SimulatorSource(Source):
         self._phase_offsets = {k: self.rng.uniform(0, 2 * math.pi) for k in self.profile["sensors"]}
 
     # ---- value generation --------------------------------------------------------
-    def _baseline(self, key: str, cfg: dict[str, Any]) -> float:
+    def _baseline(self, key: str, cfg: dict[str, Any], wander_scale: float = 1.0) -> float:
         t = self.elapsed_s
         period = float(cfg.get("wander_period_s", 600)) or 600.0
         v = cfg.get("mean", 0.0)
-        v += cfg.get("wander", 0.0) * math.sin(2 * math.pi * t / period + self._phase_offsets.get(key, 0.0))
+        v += wander_scale * cfg.get("wander", 0.0) * math.sin(2 * math.pi * t / period + self._phase_offsets.get(key, 0.0))
         v += self.rng.gauss(0, cfg.get("noise", 0.0))
         return min(max(v, cfg.get("min", -math.inf)), cfg.get("max", math.inf))
 
+    @property
+    def _progress(self) -> float:
+        """0 -> 1 over ramp_s after the fault starts (1 immediately if there is no ramp)."""
+        since = self.elapsed_s - (self.fault_start_s or 0)
+        return min(1.0, since / self.ramp_s) if self.ramp_s else 1.0
+
     def _apply_effect(self, value: float, cfg: dict[str, Any], effect: dict[str, Any]) -> float | None:
+        """Effects: empty, add, ramp_add, ramp_to, noise. ('steady' is handled in _baseline.)"""
         if effect.get("empty"):
             return None
-        since = self.elapsed_s - (self.fault_start_s or 0)
-        progress = min(1.0, since / self.ramp_s) if self.ramp_s else 1.0
+        progress = self._progress
         if "add" in effect:
             value += effect["add"]
         if "ramp_add" in effect:
@@ -91,7 +97,11 @@ class SimulatorSource(Source):
             if not sensor.enabled or cfg is None:
                 values[sensor.key] = None
                 continue
-            v: float | None = self._baseline(sensor.key, cfg)
+            effect = effects.get(sensor.key, {})
+            # "steady": fade out the slow wander as the ramp progresses, so the ramp ends
+            # at mean + ramp_add instead of wherever the wander happens to be.
+            wander_scale = 1.0 - self._progress if effect.get("steady") else 1.0
+            v: float | None = self._baseline(sensor.key, cfg, wander_scale)
             if sensor.key in effects:
                 v = self._apply_effect(v, cfg, effects[sensor.key])
             if v is not None:

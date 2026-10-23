@@ -38,6 +38,7 @@ class Sensor:
     include_in_ml: bool
     group: str | None = None
     comment: str | None = None
+    limits_note: str | None = None
     enabled_in_config: bool = True
 
     @property
@@ -65,6 +66,7 @@ class Sensor:
             "in_ml": self.in_ml,
             "group": self.group,
             "comment": self.comment,
+            "limits_note": self.limits_note,
         }
 
 
@@ -168,6 +170,7 @@ class Registry:
                 "include_in_ml": bool(raw.get("include_in_ml", False)),
                 "group": raw.get("group") or None,
                 "comment": raw.get("comment") or None,
+                "limits_note": raw.get("limits_note") or None,
             })
 
         # Group rule: members must agree on 'enabled', otherwise the whole group is disabled.
