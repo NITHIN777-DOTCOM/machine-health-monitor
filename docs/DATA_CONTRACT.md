@@ -74,7 +74,18 @@ The backend tells the two cases apart using the sensor registry (section 6):
 ### `dev_state` (device-side rules)
 
 The Arduino computes `dev_state` itself so that the buzzer and LCD work with no laptop.
-It is the worst state of any enabled sensor that has a value this second.
+It is the worst of:
+
+1. the threshold state of every enabled sensor that has a value this second (table
+   below), and
+2. **the sensor-fault rule:** if any **core** sensor that is enabled sends an empty field
+   (read failed, timeout, checksum error), `dev_state` is **at least `WARNING`, never
+   `NORMAL`**. The LCD shows the reason, e.g. `SENSOR FAULT: DHT`. If another sensor is
+   over its critical limit at the same time, the state is `CRITICAL`.
+
+Each limit has a direction (`direction` in the registry, section 7): `above` means a
+value at or above the limit is bad; `below` means a value at or below the limit is bad.
+All limits below are `above`.
 
 | Sensor       | WARNING at | CRITICAL at |
 |--------------|-----------|-------------|
@@ -99,16 +110,17 @@ Header plus three data lines:
 # ms,temp_c,humidity,sound_peak,vib_count,leak_raw,distance_cm,current_ma,bus_v,dev_state
 12000,29.0,62.0,4,0,18,41.3,182.4,4.98,NORMAL
 13000,36.0,61.0,212,47,,,,,WARNING
-14000,,,5,0,,,,,NORMAL
+14000,,,5,0,,,,,WARNING
 ```
 
 1. **All sensors present** (`12000`): every field filled, everything inside limits.
 2. **Core sensors only** (`13000`): leak, ultrasonic and INA219 are not fitted, so their
    four fields are empty. Temperature 36 °C is above the 35 °C warning limit → `WARNING`.
 3. **Failed core sensor** (`14000`): the DHT11 read failed (timeout/checksum), so
-   `temp_c` and `humidity` are empty, not 0. `dev_state` is computed from the sensors
-   that still have values. The backend will flag this as a sensor fault, because the
-   DHT11 is enabled in the registry.
+   `temp_c` and `humidity` are empty, not 0. Sound and vibration are normal, but because
+   an enabled core sensor failed, the sensor-fault rule raises `dev_state` to `WARNING`
+   and the LCD shows `SENSOR FAULT: DHT`. The backend also flags it as a sensor fault,
+   because the DHT11 is enabled in the registry.
 
 ## 5. What the backend stores
 
@@ -132,8 +144,11 @@ Empty device fields stay empty in the stored file.
 
 ## 6. ML scope
 
-- ML features are the sensors with `enabled: true` **and** `include_in_ml: true` in the
-  registry. A disabled optional sensor is simply left out of the features.
+> **Rule:** a sensor is **used by ML** only if `enabled` **and** `include_in_ml` are both
+> `true`. A sensor is **shown on the dashboard** if `enabled` is `true`. (A sensor with
+> `enabled: false` is still listed on the dashboard, but as "not connected" with no value.)
+
+- A disabled optional sensor is simply left out of the ML features.
 - **Current (`current_ma`) and bus voltage (`bus_v`) are shown on the dashboard but are
   excluded from ML.** Without a real motor load the INA219 only measures a constant
   bench current, which carries no information about machine health. If a real motor
@@ -150,7 +165,7 @@ Top-level fields:
 
 | Field            | Meaning |
 |------------------|---------|
-| `schema_version` | Registry format version (currently 1). |
+| `schema_version` | Registry format version (currently 2: version 2 added `direction`, `group` and `comment`). |
 | `csv_columns`    | The exact column order of a data line (same as section 3). |
 | `sensors`        | One entry per sensor column (everything except `ms` and `dev_state`). |
 
@@ -163,14 +178,24 @@ Fields of each sensor entry:
 | `unit`          | string          | Unit shown on the dashboard. |
 | `hardware`      | string          | Physical module (for docs and the dashboard tooltip). |
 | `pin`           | string          | Arduino pin(s), for reference. |
-| `warn`          | number or null  | Warning limit; `null` = TBD / no limit. A value at or above it is a warning. |
+| `warn`          | number or null  | Warning limit; `null` = TBD / no limit. |
 | `critical`      | number or null  | Critical limit; `null` = TBD / no limit. |
+| `direction`     | `above` / `below` | `above`: a value **at or above** the limit is bad. `below`: a value **at or below** the limit is bad. |
 | `tier`          | `core` / `optional` | Core sensors must work in the final build; optional ones may be left out. |
 | `enabled`       | boolean         | Whether this sensor is fitted in the current build. `false` → dashboard shows "not connected". |
-| `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled). |
+| `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled; see section 6). |
+| `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
+| `comment`       | string, optional | Free-text note for humans; ignored by the software. |
 
 Current state: the four core values are enabled; leak, ultrasonic and INA219 are
-`enabled: false`; `current_ma` and `bus_v` are `include_in_ml: false`.
+`enabled: false`; `current_ma` and `bus_v` are `include_in_ml: false`. Every entry uses
+`direction: "above"`; for `distance_cm` the direction is still TBD (see its `comment`),
+because "object too close" would need `below`.
+
+**Groups:** enabling or disabling a group means toggling `enabled` on **every** entry with
+that `group` value. For the INA219 that's both `current_ma` and `bus_v`; the firmware
+flag `USE_INA219` switches both columns at once. The backend should treat a group whose
+members disagree as a configuration error.
 
 ### How to add or remove an optional sensor (no code changes)
 
@@ -178,7 +203,8 @@ Current state: the four core values are enabled; leak, ultrasonic and INA219 are
    `#define USE_<SENSOR>` flag to `1` (fitted) or `0` (removed), then compile and upload.
    When it is `0` the firmware still prints the column, just empty.
 2. **Registry:** in `backend/config/sensors.json`, set `"enabled"` to `true` or `false`
-   for that sensor's entry (both entries for the INA219: `current_ma` and `bus_v`).
+   for that sensor's entry. If the entry has a `group` (e.g. `ina219`), change every
+   entry in that group (`current_ma` **and** `bus_v`).
    Set `include_in_ml` if it should or shouldn't be an ML feature.
 3. **Restart and retrain:** restart the backend (`start.bat`) so it rereads the registry,
    and retrain the ML model if the set of ML features changed. The dashboard picks up

@@ -63,8 +63,9 @@ Checked on 2026-10-23 on Windows 11 Home (10.0.26200):
 | `python --version` | `Python 3.11.9` |
 | `node --version` | `v24.16.0` |
 | `arduino-cli version` | `arduino-cli  Version: 1.5.1 Commit: 01f3d4f2b Date: 2026-06-05T10:22:12Z` |
-| `arduino-cli board list` | `No boards found.` |
+| `arduino-cli board list` | `COM5  serial  Serial Port (USB)  Arduino UNO  arduino:avr:uno  arduino:avr` |
 
-**Board:** not detected at the time of this check. Windows also listed no COM-port
-devices, so the Uno was unplugged (or, for a CH340 clone, the driver was missing). The COM
-port and genuine-vs-CH340 result will be added when the board is connected.
+**Board:** a genuine Arduino Uno (ATmega16U2 USB-serial chip, not a CH340 clone), so
+the CH340 driver is not needed. It appeared on **COM5** on the dev laptop. The COM number
+may be different on other laptops; the backend will auto-detect the port, so nobody has
+to edit a config file for it.

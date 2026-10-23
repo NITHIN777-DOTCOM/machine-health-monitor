@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "description": "Sensor registry. The backend, ML pipeline and dashboard read the sensor list from this file. See docs/DATA_CONTRACT.md.",
   "csv_columns": [
     "ms",
@@ -22,6 +22,7 @@
       "pin": "A0",
       "warn": 35,
       "critical": 40,
+      "direction": "above",
       "tier": "core",
       "enabled": true,
       "include_in_ml": true
@@ -34,6 +35,7 @@
       "pin": "A0",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "core",
       "enabled": true,
       "include_in_ml": true
@@ -46,6 +48,7 @@
       "pin": "A2",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "core",
       "enabled": true,
       "include_in_ml": true
@@ -58,6 +61,7 @@
       "pin": "D2",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "core",
       "enabled": true,
       "include_in_ml": true
@@ -70,6 +74,7 @@
       "pin": "A1",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "optional",
       "enabled": false,
       "include_in_ml": true
@@ -82,9 +87,11 @@
       "pin": "D9 (Trig) / D10 (Echo)",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "optional",
       "enabled": false,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "comment": "direction TBD: may need to be \"below\" (object too close) once limits are chosen"
     },
     {
       "key": "current_ma",
@@ -94,9 +101,11 @@
       "pin": "A4 (SDA) / A5 (SCL)",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "optional",
       "enabled": false,
-      "include_in_ml": false
+      "include_in_ml": false,
+      "group": "ina219"
     },
     {
       "key": "bus_v",
@@ -106,9 +115,11 @@
       "pin": "A4 (SDA) / A5 (SCL)",
       "warn": null,
       "critical": null,
+      "direction": "above",
       "tier": "optional",
       "enabled": false,
-      "include_in_ml": false
+      "include_in_ml": false,
+      "group": "ina219"
     }
   ]
 }
