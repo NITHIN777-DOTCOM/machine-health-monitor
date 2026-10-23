@@ -209,3 +209,87 @@ recording for the replay shots and deletes it at the end; `data/recordings/` hol
 ### Results
 - Backend pytest: **298 passed**. Vitest: **55 passed** (4 files). `tsc --noEmit` and
   `npm run build` clean. Contrast check: all pairs pass.
+
+## Final summary
+
+### Test and build results (final state)
+| Check | Result |
+|---|---|
+| Backend `pytest` (`backend/`) | **298 passed**, 0 failed (287 at the start of Phase 5) |
+| Dashboard Vitest (`npm test`) | **55 passed** in 4 files (34 at the start) |
+| `npm run typecheck` | clean |
+| `npm run build` | clean (one JS bundle ~570 kB, under the 800 kB warning limit set in Phase 4) |
+| `node scripts/contrast.mjs` | all 42 token pairs pass WCAG AA (21 per theme) |
+
+### Backend changes (all phases of this run)
+- `app/ml/scorer.py`: new health curve (`if_health`, `range_health`, `min`), plain-language
+  causes (`z_band`, `plain_words`, `short_name`; causes get `band` + new `text`).
+- `app/ml/training.py`: writes the new `calibration.rule` and `range_excess {k, b, rule}`.
+- `models/model_meta.json`: same two blocks updated; model **not retrained**, still provisional.
+- `app/analysis.py`: short `headline` + new `headline_detail`.
+- `app/ml/forecast.py`: `no_data` status when the newest value is missing.
+- `app/pipeline.py`: `ml_thresholds`, `serial {available, port, note}`, `progress` in
+  `/api/status`; `ml_thresholds` in `/api/model`; status push every second while
+  recording or replaying.
+- `app/sources/replay.py`: `rows_total`, `passes`, `progress`.
+- `app/recorder.py`: `modified` per recording; duration from the device clock first.
+- Docs kept in sync: `docs/DATA_CONTRACT.md` §9, `CLAUDE.md`, `dashboard/README.md`.
+
+### Decisions I made on my own
+1. **Dark card surface `#2d333b`** (a darker step of `#393E46`) so `#00ADB5` lines and muted
+   text pass contrast; `#393E46` is used for inset/hover surfaces.
+2. **Light-theme teal** `#00838a` (lines) and `#00747a` (text, primary button), derived from
+   `#00ADB5`, because `#00ADB5` is only 2.75:1 on white.
+3. **ML anomaly colour** muted indigo (`#5b63b0` light / `#9aa3e3` dark); a banner raised by
+   ML alone uses it instead of amber, so it reads differently from a rule warning.
+4. **Normal is neutral**: "Normal" text in the normal text colour with only a small green
+   icon; sensor cards get a coloured bar only when abnormal. The health bar fill is grey
+   while healthy and takes amber/indigo only at or below the clear level.
+5. **Font: Inter** (not IBM Plex), weights 400/500/600 only.
+6. State labels in sentence case ("Critical", "Warming up"); the mode badge stays
+   LIVE / RECORDED / SIMULATED as specified.
+7. **Health curve constants** k = 16.7, b = 0.28 chosen so vibration 13 lands at ~35, the
+   warn limit (vibration 20) at ~25 and vibration ≥ 120 at 0; parts combined with `min`.
+   Not retrained (unchanged model and calibration). Accepted side effect: ML flags a slow
+   temperature rise later (~35 °C instead of ~32.6 °C); the rules still warn at 32 °C.
+   `calibration.abnormal_score` is kept in the meta for reference; it now maps to 25, not 0.
+8. **|z| bands** 2 / 3 / 6, implemented in both the backend (cause text, headline detail) and
+   the dashboard (display, Vitest); the table is documented once in DATA_CONTRACT §9.
+   Causes with |z| < 2 are hidden ("Nothing unusual").
+9. **Confidence bands** R² 0.6 / 0.85 (0.6 = the backend's `forecast_min_r2`). A forecast with
+   no trusted trend says "no clear trend" rather than "confidence: low".
+10. **Headline wording** as in the DATA_CONTRACT table; the dashboard's Phase 4 "Recovering -
+    ..." banner rule is unchanged.
+11. **Chart grid**: last chart (health) stretches over empty cells instead of leaving a gap.
+12. **Controls as a right-hand drawer**, side by side with the dashboard (overlay below 1100 px).
+13. **Speed change restarts the running scenario** (the simulator has no live speed change);
+    the panel says so.
+14. The **Recorded** tab only shows the list; nothing switches until **Play**.
+15. Added a **None** label option (`label: null`) next to Normal / Fault. The backend only
+    applies the manual label to live (Arduino) rows; the panel says this rather than changing
+    the backend's labelling rule.
+16. **Start from recording** warm-starts the current source (`POST /api/warmstart`) rather than
+    adding a "warm start on next switch" option.
+17. **Serial availability** is reported by the backend (`status.serial`) so the dashboard
+    never guesses; port listing is cached for 5 s and skipped entirely with `MHM_SOURCE=simulator`.
+18. **Status push once a second** while recording/replaying (simplest way to keep the REC
+    counter and progress live without changing the row message).
+19. `duration_s` switched to the device clock first (consistent with replay timing).
+20. The screenshot script makes and deletes its own recording for the replay shots.
+
+### Skipped or failed
+- Nothing skipped. No push failed.
+- Not covered by an automated test: the once-a-second status push (verified live: the REC
+  counter and replay progress advance in the screenshots).
+- Known, accepted behaviour visible in screenshots: right after a fault starts, ML can show
+  "OK" with a low health number for up to 2 rows (smoothing needs 3 rows below 50).
+- Bash heredocs with nested quotes broke once (known shell issue from CLAUDE.md); I switched
+  to patch scripts written to a scratch folder inside the repo (deleted at the end, never committed).
+
+### Commits (all on `main`, pushed to `origin/main`)
+| Part | Commit | Push |
+|---|---|---|
+| A | `cd0262f` Phase 5A: professional redesign | pushed |
+| B | `cfdd1b6` Phase 5B: health curve, plain-language causes, forecast fixes | pushed |
+| C | `adacbb0` Phase 5C: dashboard controls and screenshots | pushed |
+| Report | "Phase 5: report" (this file; its hash is in `git log`) | see `git log origin/main` |
