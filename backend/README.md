@@ -74,7 +74,9 @@ until we have real recordings):
 Disabled sensors (in `sensors.json`) are always empty, exactly like the real device.
 All simulated values are clamped to each sensor's physical range (`physical_min` /
 `physical_max`; the DHT11 is 0–50 °C and 20–90 %RH).
-`dev_state` is computed by `app/device_rules.py`, the same rules as the Arduino.
+`dev_state` is computed by `app/device_rules.py`, the same rules as the Arduino:
+escalation is immediate, and de-escalation needs the value clear of the limit by the
+sensor's `hysteresis` for `hold_seconds` (settings.json, default 5) rows in a row.
 
 ## Recording and labelling
 
@@ -125,7 +127,12 @@ auto-detection.
 | POST | `/api/record/start`, `/api/record/stop` | Start/stop recording. |
 | POST | `/api/label` | `{label}`: label for live rows. |
 | GET  | `/api/recordings` | Recording files with size, row count and duration. |
-| WS   | `/ws/stream` | Messages: `{"type":"row","mode":...,"row":{...}}` and `{"type":"status","status":{...}}`. |
+| WS   | `/ws/stream` | Messages: `{"type":"row","mode":...,"row":{...},"device":{...}}` and `{"type":"status","status":{...}}`. |
+
+`device` (on every row and in `/api/status`) is the state machine snapshot: `state`,
+`reason` / `reasons` (which sensor and limit), `clearing`, `hold_remaining_s`,
+`last_change`, `device_reported` (the row's own `dev_state`) and `agrees`. Rules:
+[DATA_CONTRACT.md section 3](../docs/DATA_CONTRACT.md#dev_state-device-side-rules).
 
 ## Code map
 
@@ -135,7 +142,7 @@ auto-detection.
 | `app/config.py` | Paths, `settings.json`, `MHM_PORT`. |
 | `app/registry.py` | Loads `sensors.json`; enabled / ML sensors, limits, group rule. |
 | `app/models.py` | `SensorRow`, `parse_line()`, CSV helpers. |
-| `app/device_rules.py` | `dev_state` rules shared with the simulator (same as the firmware). |
+| `app/device_rules.py` | `DeviceStateMachine`: `dev_state` with immediate escalation, hysteresis + `hold_seconds` de-escalation (same as the firmware). Used by the simulator and mirrored in the pipeline. |
 | `app/sources/` | `simulator.py`, `serial_source.py`, `replay.py` (common interface in `base.py`). |
 | `app/pipeline.py` | source → `process()` → broadcast + history + recorder. `process()` is the Phase 3 hook for rules + ML. |
 | `app/recorder.py` | CSV recording and the recordings list. |

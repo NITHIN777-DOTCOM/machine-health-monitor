@@ -2,7 +2,8 @@
 
 Baselines and scenarios come from backend/config/sim_profile.json. Only sensors that
 are enabled in the registry get values; disabled ones are empty, like the real device.
-dev_state is computed with app.device_rules, the same rules the Arduino uses.
+dev_state is computed with app.device_rules.DeviceStateMachine, the same rules
+(hysteresis + hold time) the Arduino uses.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from ..config import SIM_PROFILE_PATH
-from ..device_rules import dev_state
+from ..device_rules import DeviceStateMachine
 from ..models import SensorRow
 from .base import Source
 
@@ -39,13 +40,15 @@ class SimulatorSource(Source):
     kind = "simulator"
 
     def __init__(self, *args: Any, scenario: str = "normal", speed: float = 1.0,
-                 profile: dict[str, Any] | None = None, seed: int | None = None, **kwargs: Any):
+                 profile: dict[str, Any] | None = None, seed: int | None = None,
+                 hold_seconds: int = 5, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.profile = profile if profile is not None else load_profile()
         if scenario not in self.profile["scenarios"]:
             raise ValueError(f"unknown scenario {scenario!r}; choose from {sorted(self.profile['scenarios'])}")
         self.scenario = scenario
         self.speed = speed
+        self.device = DeviceStateMachine(self.registry, hold_seconds)
         self.rng = random.Random(seed)
         self.tick_s = float(self.profile.get("tick_seconds", 1.0))
         self.elapsed_s = 0          # simulated seconds since start
@@ -114,7 +117,7 @@ class SimulatorSource(Source):
         return SensorRow(
             ms=int(self.elapsed_s * 1000),
             values=values,
-            dev_state=dev_state(values, self.registry),
+            dev_state=self.device.update(values),
             mode="simulated",
             source="synthetic",
             label=label,

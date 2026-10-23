@@ -33,6 +33,7 @@ class Settings:
     serial_boot_wait_s: float = 2.0
     reconnect_interval_s: float = 2.0
     history_seconds: int = 600
+    hold_seconds: int = 5            # device state: rows a level must stay clear before stepping down
     max_speed: float = 20.0
     recordings_dir: Path = field(default=RECORDINGS_DIR)
 

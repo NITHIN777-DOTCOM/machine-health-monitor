@@ -74,18 +74,89 @@ The backend tells the two cases apart using the sensor registry (section 6):
 ### `dev_state` (device-side rules)
 
 The Arduino computes `dev_state` itself so that the buzzer and LCD work with no laptop.
-It is the worst of:
+It is a small **state machine** with three states, `NORMAL` < `WARNING` < `CRITICAL`,
+updated once per data line (once per second). It **goes up fast and comes down slowly**,
+so a value hovering around a limit cannot make the buzzer and LCD flicker.
 
-1. the threshold state of every enabled sensor that has a value this second (table
-   below), and
-2. **the sensor-fault rule:** if any **core** sensor that is enabled sends an empty field
-   (read failed, timeout, checksum error), `dev_state` is **at least `WARNING`, never
-   `NORMAL`**. The LCD shows the reason, e.g. `SENSOR FAULT: DHT`. If another sensor is
-   over its critical limit at the same time, the state is `CRITICAL`.
+Two things can raise the state:
+
+1. **Limits:** a sensor value reaches its `warn` or `critical` limit (table below).
+2. **The sensor-fault rule:** an **enabled core** sensor sends an empty field (read
+   failed, timeout, checksum error). The state becomes **at least `WARNING`, never
+   `NORMAL`**, and the LCD shows the reason, e.g. `SENSOR FAULT: DHT`. If another sensor
+   is over its critical limit at the same time, the state is `CRITICAL`.
 
 Each limit has a direction (`direction` in the registry, section 7): `above` means a
 value at or above the limit is bad; `below` means a value at or below the limit is bad.
 All limits below are `above`.
+
+#### State diagram
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> NORMAL : power-on / source change (reset)
+    NORMAL --> WARNING : E1 - warn limit reached OR core sensor fault (same second)
+    NORMAL --> CRITICAL : E2 - critical limit reached (same second)
+    WARNING --> CRITICAL : E2 - critical limit reached (same second)
+    CRITICAL --> WARNING : D1 - all values clear of critical minus h for 5 s in a row
+    WARNING --> NORMAL : D2 - all values clear of warn minus h, no core fault, for 5 s in a row
+```
+
+There is **no direct `CRITICAL → NORMAL` transition**: coming down always passes
+through `WARNING`, and each step down needs its own full hold time.
+
+#### Transition conditions
+
+`h` = the sensor's `hysteresis` margin (registry); `hold` = `hold_seconds` (backend
+`settings.json`, currently **5**). "Reaches" depends on direction: for `above` it means
+value ≥ limit; for `below`, value ≤ limit.
+
+| Transition | Type | Condition (checked every row) | Timing |
+|---|---|---|---|
+| **E1** `NORMAL → WARNING` | escalation | any enabled sensor reaches its `warn` limit, **or** any enabled core sensor is empty | immediate, same row |
+| **E2** `NORMAL/WARNING → CRITICAL` | escalation | any enabled sensor reaches its `critical` limit | immediate, same row (can skip `WARNING`) |
+| **D1** `CRITICAL → WARNING` | de-escalation | **every** enabled sensor is clear of its critical limit by `h`: value < `critical − h` (`above`) or value > `critical + h` (`below`) | condition true for `hold` **consecutive** rows |
+| **D2** `WARNING → NORMAL` | de-escalation | **every** enabled sensor is clear of its warn limit by `h` (same rule with `warn`) **and** no enabled core sensor is empty | condition true for `hold` **consecutive** rows |
+
+- **Hold counter:** it counts consecutive rows where the de-escalation condition is
+  true. Any row where it is false (the value is back inside the margin band) resets the
+  counter to 0. An escalation also resets it.
+- **Margin band:** a value between `limit − h` and the limit (e.g. 34.5–35 °C for
+  `temp_c` critical) does not raise the state, but it keeps the current state from
+  clearing.
+- **Reason:** the device remembers which sensor and limit caused the state, e.g.
+  `Temperature 35.1 >= crit 35` or `SENSOR FAULT: DHT11`, and the LCD shows it. While
+  counting down, the last reason is kept and the remaining hold time is shown.
+
+Hysteresis margins (`hysteresis` in the registry):
+
+| Sensor | `h` | Example |
+|---|---|---|
+| `temp_c` | 0.5 °C | CRITICAL at 35.0 → must fall below 34.5 for 5 s to drop to WARNING |
+| `humidity` | 3 %RH | WARNING at 80 → must fall below 77 for 5 s to drop to NORMAL |
+| `sound_peak` | 10 | CRITICAL at 120 → must stay below 110 for 5 s |
+| `vib_count` | 5 /s | WARNING at 20 → must stay below 15 for 5 s |
+| optional sensors | `null` (= 0) | limits TBD |
+
+#### Worked example (`temp_c`, warn 32, critical 35, h 0.5, hold 5)
+
+| Row | temp_c | State | Why |
+|---|---|---|---|
+| 1 | 32.1 | `WARNING` | E1: reached warn 32, same row |
+| 2 | 31.8 | `WARNING` | below 32 but inside the band (≥ 31.5): hold counter stays 0 |
+| 3–6 | 31.4 | `WARNING` | clear of 31.5: hold 1, 2, 3, 4 |
+| 7 | 31.4 | `NORMAL` | D2: clear for 5 consecutive rows |
+| 8 | 35.0 | `CRITICAL` | E2: straight from NORMAL to CRITICAL |
+| 9–13 | 34.4 | `CRITICAL` → `WARNING` at row 13 | D1: clear of 34.5 for 5 rows; one level only |
+| 14–18 | 31.0 | `WARNING` → `NORMAL` at row 18 | D2: a separate 5-row hold |
+| 19 | empty | `WARNING` | E1: core sensor fault |
+
+The backend runs the same state machine (`backend/app/device_rules.py`,
+`DeviceStateMachine`) for the simulator and as a mirror of the real device, and the
+firmware copies it in Phase 7. `GET /api/status` and every WebSocket row include its
+`state`, `reason`, `hold_remaining_s` and whether it `agrees` with the device's own
+`dev_state`.
 
 | Sensor       | WARNING at | CRITICAL at |
 |--------------|-----------|-------------|
@@ -190,6 +261,7 @@ Fields of each sensor entry:
 | `enabled`       | boolean         | Whether this sensor is fitted in the current build. `false` → dashboard shows "not connected". |
 | `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled; see section 6). |
 | `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
+| `hysteresis`    | number or null  | De-escalation margin `h` (section 3): to leave a level, the value must be clear of the limit by `h`, in the limit's direction. `null` = no margin. |
 | `limits_note`   | string, optional | Where the limits come from, e.g. "provisional demo limit - retune from real data in Phase 8". The dashboard can show it next to the limits. |
 | `comment`       | string, optional | Free-text note for humans; ignored by the software. |
 

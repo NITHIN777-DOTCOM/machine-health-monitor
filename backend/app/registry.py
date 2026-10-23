@@ -33,6 +33,7 @@ class Sensor:
     warn: float | None
     critical: float | None
     direction: str
+    hysteresis: float | None
     tier: str
     enabled: bool              # effective value (False if its group is in conflict)
     include_in_ml: bool
@@ -59,6 +60,7 @@ class Sensor:
             "warn": self.warn,
             "critical": self.critical,
             "direction": self.direction,
+            "hysteresis": self.hysteresis,
             "tier": self.tier,
             "enabled": self.enabled,
             "enabled_in_config": self.enabled_in_config,
@@ -165,6 +167,7 @@ class Registry:
                 "warn": _number_or_none(raw.get("warn"), f"{key}.warn", warn),
                 "critical": _number_or_none(raw.get("critical"), f"{key}.critical", warn),
                 "direction": direction,
+                "hysteresis": _hysteresis(raw.get("hysteresis"), key, warn),
                 "tier": tier,
                 "enabled": bool(raw.get("enabled", False)),
                 "include_in_ml": bool(raw.get("include_in_ml", False)),
@@ -216,6 +219,14 @@ class Registry:
             len(sensors), [s.key for s in reg.enabled], [s.key for s in reg.ml],
         )
         return reg
+
+
+def _hysteresis(value: Any, key: str, warn) -> float | None:
+    h = _number_or_none(value, f"{key}.hysteresis", warn)
+    if h is not None and h < 0:
+        warn(f"{key}.hysteresis = {h} is negative, treated as null (no margin)")
+        return None
+    return h
 
 
 def _number_or_none(value: Any, name: str, warn) -> float | None:

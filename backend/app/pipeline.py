@@ -9,6 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
+from .device_rules import DeviceStateMachine
 from .models import SensorRow
 from .sources import ReplaySource, SerialSource, SimulatorSource, Source
 from .sources.replay import resolve_recording
@@ -30,6 +31,10 @@ class Pipeline:
         self.source: Source | None = None
         self._task: asyncio.Task[None] | None = None
         self.sim_profile = load_profile()
+        # Backend mirror of the device-tier rules. For simulated rows it matches dev_state
+        # exactly; for live rows it explains the device's state (reason, hold timer).
+        self.device = DeviceStateMachine(state.registry, state.settings.hold_seconds)
+        self.device_reported: str | None = None
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -41,7 +46,8 @@ class Pipeline:
         if not 0 < speed <= st.settings.max_speed:
             raise ValueError(f"speed must be > 0 and <= {st.settings.max_speed}")
         if type == "simulator":
-            return SimulatorSource(**common, scenario=scenario or "normal", speed=speed, profile=self.sim_profile)
+            return SimulatorSource(**common, scenario=scenario or "normal", speed=speed, profile=self.sim_profile,
+                                   hold_seconds=st.settings.hold_seconds)
         if type == "serial":
             return SerialSource(**common, settings=st.settings, label_getter=self.live_label)
         if type == "replay":
@@ -59,6 +65,8 @@ class Pipeline:
         await self.stop()
         self.source = source
         self.state.history.clear()
+        self.device.reset()
+        self.device_reported = None
         self._task = asyncio.create_task(self._run(source), name=f"source-{source.kind}")
         log.info("Source switched to %s", source.kind)
         await self.notify_status()
@@ -89,10 +97,12 @@ class Pipeline:
     async def handle(self, row: SensorRow) -> None:
         st = self.state
         row = process(row, st)
+        self.device.update(row.values)
+        self.device_reported = row.dev_state
         st.rows_received += 1
         st.history.append(row)
         st.recorder.write(row)
-        await st.broadcaster.send({"type": "row", "mode": row.mode, "row": row.to_dict()})
+        await st.broadcaster.send({"type": "row", "mode": row.mode, "row": row.to_dict(), "device": self.device_status()})
 
     # ---- status ------------------------------------------------------------------------
     def status(self) -> dict[str, Any]:
@@ -108,6 +118,7 @@ class Pipeline:
             "connected": src.get("connected", False),
             "last_error": src.get("last_error"),
             "source_detail": src,
+            "device": self.device_status(),
             "recording": st.recorder.status(),
             "rows_received": st.rows_received,
             "rows_rejected": st.parse_stats.rejected,
@@ -116,6 +127,13 @@ class Pipeline:
             "registry_warnings": st.registry.warnings,
             "scenarios": sorted(self.sim_profile["scenarios"]),
         }
+
+    def device_status(self) -> dict[str, Any]:
+        """Mirror state machine snapshot, plus what the device itself reported."""
+        snap = self.device.snapshot()
+        snap["device_reported"] = self.device_reported
+        snap["agrees"] = None if self.device_reported is None else self.device_reported == snap["state"]
+        return snap
 
     async def notify_status(self) -> None:
         await self.state.broadcaster.send({"type": "status", "status": self.status()})

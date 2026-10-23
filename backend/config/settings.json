@@ -4,5 +4,6 @@
   "serial_boot_wait_s": 2.0,
   "reconnect_interval_s": 2.0,
   "history_seconds": 600,
+  "hold_seconds": 5,
   "max_speed": 20
 }
