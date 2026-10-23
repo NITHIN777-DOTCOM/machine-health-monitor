@@ -1,0 +1,8 @@
+{
+  "serial_port": null,
+  "baud": 115200,
+  "serial_boot_wait_s": 2.0,
+  "reconnect_interval_s": 2.0,
+  "history_seconds": 600,
+  "max_speed": 20
+}
