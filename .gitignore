@@ -1,0 +1,38 @@
+# --- Python ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# --- Node / dashboard ---
+node_modules/
+dashboard/dist/
+npm-debug.log*
+yarn-error.log*
+
+# --- PyInstaller ---
+build/
+dist/
+*.spec
+
+# --- Secrets ---
+.env
+.env.*
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# NOTE: data/recordings/ and models/ are deliberately NOT ignored.

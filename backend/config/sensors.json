@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "description": "Sensor registry. The backend, ML pipeline and dashboard read the sensor list from this file. See docs/DATA_CONTRACT.md.",
+  "csv_columns": [
+    "ms",
+    "temp_c",
+    "humidity",
+    "sound_peak",
+    "vib_count",
+    "leak_raw",
+    "distance_cm",
+    "current_ma",
+    "bus_v",
+    "dev_state"
+  ],
+  "sensors": [
+    {
+      "key": "temp_c",
+      "display_name": "Temperature",
+      "unit": "°C",
+      "hardware": "DHT11",
+      "pin": "A0",
+      "warn": 35,
+      "critical": 40,
+      "tier": "core",
+      "enabled": true,
+      "include_in_ml": true
+    },
+    {
+      "key": "humidity",
+      "display_name": "Humidity",
+      "unit": "%RH",
+      "hardware": "DHT11",
+      "pin": "A0",
+      "warn": null,
+      "critical": null,
+      "tier": "core",
+      "enabled": true,
+      "include_in_ml": true
+    },
+    {
+      "key": "sound_peak",
+      "display_name": "Sound level (peak deviation)",
+      "unit": "counts",
+      "hardware": "Sound module (analog out)",
+      "pin": "A2",
+      "warn": null,
+      "critical": null,
+      "tier": "core",
+      "enabled": true,
+      "include_in_ml": true
+    },
+    {
+      "key": "vib_count",
+      "display_name": "Vibration",
+      "unit": "edges/s",
+      "hardware": "SW-420 (HW-072)",
+      "pin": "D2",
+      "warn": null,
+      "critical": null,
+      "tier": "core",
+      "enabled": true,
+      "include_in_ml": true
+    },
+    {
+      "key": "leak_raw",
+      "display_name": "Water leak",
+      "unit": "counts",
+      "hardware": "Water leak sensor (analog)",
+      "pin": "A1",
+      "warn": null,
+      "critical": null,
+      "tier": "optional",
+      "enabled": false,
+      "include_in_ml": true
+    },
+    {
+      "key": "distance_cm",
+      "display_name": "Distance",
+      "unit": "cm",
+      "hardware": "HC-SR04",
+      "pin": "D9 (Trig) / D10 (Echo)",
+      "warn": null,
+      "critical": null,
+      "tier": "optional",
+      "enabled": false,
+      "include_in_ml": true
+    },
+    {
+      "key": "current_ma",
+      "display_name": "Current",
+      "unit": "mA",
+      "hardware": "INA219 (I2C 0x40)",
+      "pin": "A4 (SDA) / A5 (SCL)",
+      "warn": null,
+      "critical": null,
+      "tier": "optional",
+      "enabled": false,
+      "include_in_ml": false
+    },
+    {
+      "key": "bus_v",
+      "display_name": "Bus voltage",
+      "unit": "V",
+      "hardware": "INA219 (I2C 0x40)",
+      "pin": "A4 (SDA) / A5 (SCL)",
+      "warn": null,
+      "critical": null,
+      "tier": "optional",
+      "enabled": false,
+      "include_in_ml": false
+    }
+  ]
+}
