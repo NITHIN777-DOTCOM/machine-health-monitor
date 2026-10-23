@@ -66,10 +66,16 @@ def test_metric_definitions_on_crafted_data(registry):
     result = evaluation.run(data, registry, None, Settings())
     assert result["detectors"] == ["rules", "rules_critical", "forecast"]   # no model -> no ml
     rules = result["metrics"]["rules"]
-    # windows start at row 9 (10 s window): normal rows 9-19 and 30-39 = 21, fault rows 20-29 = 10
-    assert (rules["fault"], rules["fault_flagged"], rules["normal"], rules["normal_flagged"]) == (10, 7, 21, 1)
+    # windows start at row 9 (10 s window): normal rows 9-19 and 30-39 = 21, fault rows 20-29 = 10.
+    # Rows 30-39 are within the 15 s margin (10 s window + 5 s hold) after the fault: excluded
+    # from the main false alarm rate, included in the raw one.
+    assert result["margin_s"] == 15
+    assert (rules["fault"], rules["fault_flagged"]) == (10, 7)
+    assert (rules["normal"], rules["normal_flagged"]) == (11, 0)
+    assert (rules["normal_raw"], rules["normal_raw_flagged"]) == (21, 1)
     assert rules["detection_rate"] == pytest.approx(0.7)
-    assert rules["false_alarm_rate"] == pytest.approx(1 / 21)
+    assert rules["false_alarm_rate"] == 0
+    assert rules["false_alarm_rate_raw"] == pytest.approx(1 / 21)
     assert (rules["episodes"], rules["episodes_detected"], rules["mean_delay_s"]) == (1, 1, 3.0)
     assert result["metrics"]["rules_critical"]["false_alarm_rate"] == 0
     assert result["metrics"]["forecast"]["episodes_detected"] == 0      # flat values: nothing to forecast
@@ -80,7 +86,7 @@ def test_unknown_rows_are_not_evaluated(registry):
     for r in rows[30:]:
         r.label = "unknown"
     m = evaluation.run(Dataset(["c"], [Segment("c", rows)]), registry, None, Settings())["metrics"]["rules"]
-    assert m["normal"] == 11
+    assert m["normal"] == 11 and m["normal_raw"] == 11
 
 
 def test_report_is_stamped_when_simulated(registry):
@@ -153,3 +159,11 @@ def test_from_real_requires_real_normal_rows(tmp_path, registry, profile):
     f = write_csv(tmp_path / "syn.csv", registry, rows)
     with pytest.raises(SystemExit):
         generate_synthetic.profile_from_real(profile, [str(f)], registry)
+
+
+def test_margin_only_applies_shortly_after_a_fault(registry):
+    rows = crafted_rows() + rows_from([dict(CORE)] * 20, source="real", start_ms=40_000)
+    rows[50].dev_state = "WARNING"                    # 21 s after the fault: a real false alarm
+    m = evaluation.run(Dataset(["c"], [Segment("c", rows)]), registry, None, Settings())["metrics"]["rules"]
+    assert (m["normal"], m["normal_flagged"]) == (11 + 15, 1)     # rows 45-59 are outside the margin
+    assert (m["normal_raw"], m["normal_raw_flagged"]) == (41, 2)

@@ -1,7 +1,9 @@
 """Time-to-limit forecast: a linear trend per sensor. Pure function, no model needed, so it
 keeps working when ML is off.
 
-For every enabled sensor that has a warn and/or critical limit:
+For every enabled sensor with "forecast": true in the registry and a warn and/or
+critical limit (spiky event signals like sound and vibration have forecast: false, a
+linear trend through them misleads):
   - fit value = a + b*t over the last `window_s` seconds of the device clock (ms)
   - if there are too few points          -> "insufficient_data"
   - if the fitted value is already at/past a limit -> that limit is "reached"
@@ -21,10 +23,13 @@ from ..registry import Registry, Sensor
 MIN_COVERAGE = 0.5   # need values for at least half of the window's seconds
 
 
-def _fmt_eta(seconds: float) -> str:
-    if seconds < 90:
-        return f"{seconds:.0f} s"
-    return f"{seconds / 60:.0f} min"
+def human_eta(seconds: float, cap_s: float = 1800) -> str:
+    """Rounded for people: "< 1 min", "~2 min", "~4 min", "> 30 min". Exact seconds stay in the data."""
+    if seconds > cap_s:
+        return f"> {cap_s / 60:.0f} min"
+    if seconds < 60:
+        return "< 1 min"
+    return f"~{max(1, round(seconds / 60))} min"
 
 
 def _fit(t: np.ndarray, v: np.ndarray) -> tuple[float, float, float]:
@@ -76,10 +81,9 @@ def forecast_sensor(sensor: Sensor, rows: Sequence[Any], *, window_s: float = 60
             any_eta = True
         elif trusted:
             eta = (limit - level) / slope
-            if eta > cap_s:
-                out[f"to_{name}"] = f"> {cap_s / 60:.0f} min"
-            else:
-                out[f"to_{name}_s"], out[f"to_{name}"] = round(eta, 1), _fmt_eta(eta)
+            out[f"to_{name}"] = human_eta(eta, cap_s)
+            if eta <= cap_s:
+                out[f"to_{name}_s"] = round(eta, 1)
                 any_eta = True
 
     if out["to_critical"] == "reached" or out["to_warn"] == "reached":
@@ -90,9 +94,8 @@ def forecast_sensor(sensor: Sensor, rows: Sequence[Any], *, window_s: float = 60
         out["status"] = "stable"
     def describe(lvl: str) -> str:
         when = out[f"to_{lvl}"]
-        if when == "reached" or when.startswith(">"):
-            return f"{lvl.upper()} {when}"
-        return f"{lvl.upper()} in ~{when}"
+        name = "WARNING" if lvl == "warn" else "CRITICAL"
+        return f"{name} {when}" if when == "reached" else f"{name} in {when}"
 
     parts = [describe(lvl) for lvl in ("warn", "critical") if out[f"to_{lvl}"] is not None]
     out["text"] = f"{sensor.display_name}: " + (", ".join(parts) if parts else "stable")
@@ -101,10 +104,14 @@ def forecast_sensor(sensor: Sensor, rows: Sequence[Any], *, window_s: float = 60
 
 def forecast(rows: Sequence[Any], registry: Registry, *, window_s: float = 60, min_r2: float = 0.6,
              cap_s: float = 1800) -> dict[str, dict[str, Any]]:
-    """Forecast every enabled sensor that has at least one limit. rows: oldest first,
-    objects with .ms and .values (SensorRow)."""
+    """Forecast every enabled sensor with forecast: true and at least one limit.
+    rows: oldest first, objects with .ms and .values (SensorRow)."""
     return {s.key: forecast_sensor(s, rows, window_s=window_s, min_r2=min_r2, cap_s=cap_s)
-            for s in registry.enabled if s.warn is not None or s.critical is not None}
+            for s in forecast_sensors(registry)}
+
+
+def forecast_sensors(registry: Registry) -> list[Sensor]:
+    return [s for s in registry.enabled if s.forecast and (s.warn is not None or s.critical is not None)]
 
 
 def predicts_critical(fc: dict[str, dict[str, Any]]) -> bool:

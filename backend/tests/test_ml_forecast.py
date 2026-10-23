@@ -3,7 +3,7 @@ import random
 
 import pytest
 
-from app.ml.forecast import forecast, predicts_critical
+from app.ml.forecast import forecast, forecast_sensors, human_eta, predicts_critical
 from helpers import make_reg, rows_from, sensor
 
 ABOVE = make_reg(sensor("t", 32, 35))
@@ -23,7 +23,8 @@ def test_rising_towards_above_limit():
     assert f["to_warn_s"] == pytest.approx((32 - level) / 0.02, rel=1e-3)
     assert f["to_critical_s"] == pytest.approx((35 - level) / 0.02, rel=1e-3)
     assert f["r2"] == pytest.approx(1.0) and f["slope_per_s"] == pytest.approx(0.02)
-    assert f["text"].startswith("T: WARN in ~")
+    assert f["to_warn"] == "~2 min" and f["to_critical"] == "~5 min"
+    assert f["text"] == "T: WARNING in ~2 min, CRITICAL in ~5 min"
 
 
 def test_falling_towards_below_limit():
@@ -66,6 +67,7 @@ def test_reached_limits():
 def test_warn_reached_critical_approaching():
     f = forecast(series("t", 31.0, 0.05), ABOVE)["t"]
     assert f["to_warn"] == "reached" and f["to_critical_s"] > 0 and f["status"] == "reached"
+    assert f["text"].startswith("T: WARNING reached, CRITICAL in ")
 
 
 def test_uses_device_clock():
@@ -83,9 +85,22 @@ def test_insufficient_data():
     assert forecast([], ABOVE)["t"]["status"] == "insufficient_data"
 
 
-def test_only_enabled_sensors_with_limits():
-    reg = make_reg(sensor("t", 32, 35), sensor("h", None, None), sensor("x", 1, 2, enabled=False))
+def test_only_enabled_forecast_sensors_with_limits():
+    reg = make_reg(sensor("t", 32, 35), sensor("h", None, None), sensor("x", 1, 2, enabled=False),
+                   sensor("v", 20, 60, forecast=False))
     assert set(forecast(series("t", 28, 0.02), reg)) == {"t"}
+
+
+def test_registry_forecast_flags(registry):
+    assert [s.key for s in forecast_sensors(registry)] == ["temp_c", "humidity"]
+
+
+@pytest.mark.parametrize("seconds, text", [
+    (0, "< 1 min"), (59, "< 1 min"), (60, "~1 min"), (100, "~2 min"), (150, "~2 min"),
+    (151, "~3 min"), (230, "~4 min"), (1800, "~30 min"), (1801, "> 30 min"),
+])
+def test_human_eta(seconds, text):
+    assert human_eta(seconds, 1800) == text
 
 
 def test_window_limits_history():

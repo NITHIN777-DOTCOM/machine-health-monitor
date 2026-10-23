@@ -15,7 +15,7 @@ def sensor(key, warn, critical, direction="above", hysteresis=None, tier="core",
     """A sensors.json entry for a fake registry."""
     return {"key": key, "display_name": key.upper(), "hardware": key.upper() + "-HW", "warn": warn,
             "critical": critical, "direction": direction, "hysteresis": hysteresis, "tier": tier,
-            "enabled": enabled, "include_in_ml": True, **kw}
+            "enabled": enabled, "include_in_ml": True, "forecast": True, **kw}
 
 
 def make_reg(*sensors) -> Registry:
@@ -30,6 +30,21 @@ def rows_from(values: list[dict], *, step_ms: int = 1000, start_ms: int = 0, **m
     return [SensorRow(ms=start_ms + i * step_ms, values=v, dev_state=meta.get("dev_state", "NORMAL"),
                       mode=meta.get("mode", "live"), source=meta.get("source", "real"),
                       label=meta.get("label", "normal")) for i, v in enumerate(values)]
+
+
+def sim_rows(registry: Registry, scenario: str, seconds: int, seed: int, source: str = "synthetic",
+             profile: dict | None = None) -> list[SensorRow]:
+    """Simulator rows stepped directly, with the given source."""
+    from app.sources.simulator import load_profile
+    sim = SimulatorSource(registry=registry, stats=ParseStats(), scenario=scenario,
+                          profile=profile or load_profile(), seed=seed)
+    rows = []
+    for _ in range(seconds):
+        r = sim.make_row()
+        r.source = source
+        rows.append(r)
+        sim.elapsed_s += 1
+    return rows
 
 
 def run_scenario(registry: Registry, profile: dict, scenario: str, seconds: int, seed: int = 0,

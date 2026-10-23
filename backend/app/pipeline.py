@@ -1,4 +1,4 @@
-"""Row pipeline: source -> process(row) -> broadcast + history + recorder.
+"""Row pipeline: source -> device mirror -> process(row) (ML + forecast) -> broadcast + history + recorder.
 
 One source runs at a time as a background task. switch() stops the old source and
 starts a new one without restarting the server.
@@ -10,7 +10,11 @@ import logging
 import time
 from typing import Any
 
+from .analysis import Analyzer
 from .device_rules import DeviceStateMachine
+from .ml import dataset
+from .ml.jobs import TrainJobs
+from .ml.scorer import Scorer
 from .models import SensorRow
 from .sources import ReplaySource, SerialSource, SimulatorSource, Source
 from .sources.replay import resolve_recording
@@ -18,12 +22,6 @@ from .sources.simulator import load_profile
 from .state import AppState
 
 log = logging.getLogger(__name__)
-
-
-def process(row: SensorRow, state: AppState) -> SensorRow:
-    """Per-row processing step. Currently a pass-through."""
-    # Phase 3: rules + ML here (backend-side rule evaluation, anomaly score, prediction).
-    return row
 
 
 class Pipeline:
@@ -42,6 +40,10 @@ class Pipeline:
         self._last_row_at: float | None = None
         self._reported_connected: bool | None = None
         self._watchdog: asyncio.Task[None] | None = None
+        # ML + forecast. The model is loaded once; reload_model() swaps it at runtime.
+        self.scorer = Scorer.load(state.registry, state.settings.models_dir)
+        self.analyzer = Analyzer(state.registry, state.settings, self.scorer)
+        self.train_jobs = TrainJobs(state.registry, state.settings, on_done=self.reload_model)
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -68,12 +70,17 @@ class Pipeline:
         return self.state.recorder.label or "unknown"
 
     # ---- running -----------------------------------------------------------------------
-    async def switch(self, source: Source) -> None:
+    async def switch(self, source: Source, warmstart_file: str | None = None) -> None:
+        """Start a new source. A warm start given here is queued before the source produces
+        its first row, so the stream never shows "warming up"."""
         await self.stop()
         self.source = source
         self.state.history.clear()
         self.device.reset()
         self.device_reported = None
+        self.analyzer.reset()
+        if warmstart_file:
+            self.warm_start(warmstart_file)
         self._started_at = time.monotonic()
         self._last_row_at = None
         self._task = asyncio.create_task(self._run(source), name=f"source-{source.kind}")
@@ -94,6 +101,7 @@ class Pipeline:
             await self.source.close()
 
     async def shutdown(self) -> None:
+        await self.train_jobs.shutdown()
         await self.stop()
         watchdog, self._watchdog = self._watchdog, None
         if watchdog is not None:
@@ -122,16 +130,59 @@ class Pipeline:
             source.connected = False
         await self.notify_status()
 
-    async def handle(self, row: SensorRow) -> None:
-        st = self.state
-        row = process(row, st)
+    def process(self, row: SensorRow) -> dict:
+        """Device-state mirror, then features + ML score + forecast -> the row's analysis block."""
         self.device.update(row.values)
         self.device_reported = row.dev_state
+        return self.analyzer.update(row, self.device_status())
+
+    async def handle(self, row: SensorRow) -> None:
+        st = self.state
+        analysis = self.process(row)
         self._last_row_at = time.monotonic()
         st.rows_received += 1
-        st.history.append(row)
-        st.recorder.write(row)
-        await st.broadcaster.send({"type": "row", "mode": row.mode, "row": row.to_dict(), "device": self.device_status()})
+        st.history.append(row, analysis)
+        st.recorder.write(row)            # raw contract row only: recordings stay clean training data
+        await st.broadcaster.send({"type": "row", "mode": row.mode, "row": row.to_dict(), "analysis": analysis})
+
+    # ---- warm start and model ------------------------------------------------------------
+    def warm_start(self, file: str) -> int:
+        """Pre-fill the ML window and forecast history from the last W+60 s of a recording.
+        Raises FileNotFoundError / ValueError."""
+        path = resolve_recording(self.state.settings.recordings_dir, file)
+        data = dataset.load([str(path)], self.state.registry)
+        rows = data.segments[-1].rows if data.segments else []
+        rows = [r for r in rows if r.ms is not None]
+        if not rows:
+            raise ValueError(f"{file} has no usable rows")
+        window_s = self.scorer.meta.get("window_s", self.state.settings.ml_window_s)
+        keep_ms = (window_s + self.state.settings.forecast_window_s) * 1000
+        rows = [r for r in rows if r.ms > rows[-1].ms - keep_ms]
+        n = self.analyzer.warm_start(rows, path.name)
+        log.info("Warm start queued from %s: %d rows", path.name, n)
+        return n
+
+    async def reload_model(self) -> dict:
+        self.scorer = Scorer.load(self.state.registry, self.state.settings.models_dir)
+        self.analyzer.set_scorer(self.scorer)
+        log.info("Model reloaded: %s", self.scorer.status)
+        await self.notify_status()
+        return self.model_info()
+
+    def model_info(self) -> dict:
+        m = self.scorer.meta
+        training = m.get("training", {})
+        return {
+            **self.scorer.info(),
+            "trained_on": training.get("rows_normal_by_source"),
+            "training_windows": training.get("windows"),
+            "training_files": training.get("files"),
+            "feature_count": len(m.get("feature_names", [])),
+            "calibration": m.get("calibration"),
+            "range_excess": m.get("range_excess"),
+            "sklearn_version": m.get("sklearn_version"),
+            "provisional_reason": m.get("provisional_reason"),
+        }
 
     # ---- status ------------------------------------------------------------------------
     def link(self) -> dict[str, Any]:
@@ -175,6 +226,10 @@ class Pipeline:
             "last_error": src.get("last_error"),
             "source_detail": src,
             "device": self.device_status(),
+            "analysis": self.analyzer.last,
+            "model": self.scorer.info(),
+            "warm_start": self.analyzer.warm_info,
+            "analysis_timing_ms": self.analyzer.timing(),
             "recording": st.recorder.status(),
             "rows_received": st.rows_received,
             "rows_rejected": st.parse_stats.rejected,

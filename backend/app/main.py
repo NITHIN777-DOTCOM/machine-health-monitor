@@ -12,9 +12,12 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from .analysis import compact
 from .config import load_settings
+from .ml.jobs import JobBusy
 from .pipeline import Pipeline
 from .recorder import Recorder, list_recordings
+from .sources.replay import resolve_recording
 from .registry import Registry
 from .sources.serial_source import port_exists, resolve_port
 from .state import AppState, RingBuffer
@@ -54,7 +57,14 @@ async def lifespan(app: FastAPI):
     kind, reason = _choose_startup_source(state)
     state.startup_reason = reason
     log.info("Startup source: %s (%s)", kind, reason)
-    await pipeline.switch(pipeline.make_source(kind))
+    warm = state.settings.warmstart_file
+    if warm:
+        try:
+            resolve_recording(state.settings.recordings_dir, warm)
+        except FileNotFoundError as exc:
+            log.warning("warmstart_file %r not used: %s", warm, exc)
+            warm = None
+    await pipeline.switch(pipeline.make_source(kind), warmstart_file=warm)
     try:
         yield
     finally:
@@ -87,10 +97,19 @@ class SourceRequest(BaseModel):
     speed: float | None = None
     file: str | None = None
     loop: bool = False
+    warmstart: str | None = None     # recording to warm-start the new source from
 
 
 class LabelRequest(BaseModel):
     label: Literal["normal", "fault", "unknown"] | None
+
+
+class FileRequest(BaseModel):
+    file: str
+
+
+class TrainRequest(BaseModel):
+    files: list[str]
 
 
 # ---- REST ----------------------------------------------------------------------------
@@ -106,21 +125,34 @@ async def get_sensors():
 
 
 @app.get("/api/history")
-async def get_history(seconds: float = Query(600, gt=0)):
-    rows = _state().history.since(seconds)
-    return {"seconds": seconds, "count": len(rows), "rows": [r.to_dict() for r in rows]}
+async def get_history(seconds: float = Query(600, gt=0), detail: Literal["compact", "full", "none"] = "compact"):
+    """Rows of the last N seconds, each with its analysis (compact: overall, ML status,
+    health and forecast seconds, enough for trend charts; full: the whole analysis block)."""
+    items = _state().history.since(seconds)
+    rows = []
+    for row, analysis in items:
+        d = row.to_dict()
+        if detail != "none":
+            d["analysis"] = analysis if detail == "full" else compact(analysis)
+        rows.append(d)
+    return {"seconds": seconds, "count": len(rows), "rows": rows}
 
 
 @app.post("/api/source")
 async def set_source(req: SourceRequest):
     pipeline = _pipeline()
     try:
+        if req.warmstart:
+            resolve_recording(_state().settings.recordings_dir, req.warmstart)   # 404 before switching
         source = pipeline.make_source(req.type, scenario=req.scenario, speed=req.speed, file=req.file, loop=req.loop)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    await pipeline.switch(source)
+    try:
+        await pipeline.switch(source, warmstart_file=req.warmstart)
+    except ValueError as exc:                     # recording exists but has no usable rows
+        raise HTTPException(400, str(exc))
     return pipeline.status()
 
 
@@ -148,6 +180,50 @@ async def set_label(req: LabelRequest):
 @app.get("/api/recordings")
 async def get_recordings():
     return {"recordings": list_recordings(_state().settings.recordings_dir)}
+
+
+@app.post("/api/warmstart")
+async def warmstart(req: FileRequest):
+    try:
+        n = _pipeline().warm_start(req.file)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    await _pipeline().notify_status()
+    return {"file": req.file, "rows": n, "message": f"warm-starting from {req.file} ({n} rows) at the next row"}
+
+
+# ---- model -----------------------------------------------------------------------------
+
+@app.get("/api/model")
+async def get_model():
+    return _pipeline().model_info()
+
+
+@app.post("/api/model/reload")
+async def reload_model():
+    return await _pipeline().reload_model()
+
+
+@app.post("/api/model/train", status_code=202)
+async def train_model(req: TrainRequest):
+    try:
+        return _pipeline().train_jobs.start(req.files)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except JobBusy as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get("/api/model/train/{job_id}")
+async def train_status(job_id: str):
+    job = _pipeline().train_jobs.view(job_id)
+    if job is None:
+        raise HTTPException(404, f"no training job {job_id!r}")
+    return job
 
 
 # ---- WebSocket -----------------------------------------------------------------------

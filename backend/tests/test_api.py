@@ -1,11 +1,12 @@
 """REST + WebSocket API with FastAPI's TestClient. The serial port is never touched."""
+import shutil
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.config import Settings
+from app.config import MODELS_DIR, Settings
 from app.models import stored_columns
 from app.sources import serial_source
 
@@ -13,7 +14,12 @@ from app.sources import serial_source
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.delenv("MHM_PORT", raising=False)
-    monkeypatch.setattr(main, "load_settings", lambda: Settings(recordings_dir=tmp_path, link_grace_s=0.3))
+    models = tmp_path / "models"                     # a copy: tests may retrain or delete it
+    models.mkdir()
+    for name in ("model.joblib", "model_meta.json"):
+        shutil.copy(MODELS_DIR / name, models / name)
+    monkeypatch.setattr(main, "load_settings",
+                        lambda: Settings(recordings_dir=tmp_path, models_dir=models, link_grace_s=0.3))
     # No real hardware: startup and any switch to serial see no ports at all.
     monkeypatch.setattr(serial_source.list_ports, "comports", lambda: [])
     with TestClient(main.app) as c:
@@ -55,8 +61,16 @@ def test_sensors_is_the_registry(client, registry):
 
 def test_history(client):
     fast_sim(client)
-    rows = wait_for(lambda: (h := client.get("/api/history?seconds=600").json())["count"] >= 5 and h["rows"])
-    assert list(rows[0]) == stored_columns(main.app.state.mhm.registry)
+    rows = wait_for(lambda: (h := client.get("/api/history?seconds=600").json())["count"] >= 12 and h["rows"])
+    assert list(rows[0]) == stored_columns(main.app.state.mhm.registry) + ["analysis"]
+    compact = rows[-1]["analysis"]
+    assert set(compact) == {"overall", "alert_source", "ml_status", "health", "forecast"}
+    assert compact["ml_status"] == "OK" and compact["health"] is not None      # trend-chart data
+    assert set(compact["forecast"]) == {"temp_c", "humidity"}
+    full = client.get("/api/history?seconds=600&detail=full").json()["rows"][-1]["analysis"]
+    assert {"headline", "device", "ml", "forecast"} <= set(full)
+    plain = client.get("/api/history?seconds=600&detail=none").json()["rows"][-1]
+    assert "analysis" not in plain
     assert client.get("/api/history?seconds=0").status_code == 422
 
 
@@ -70,6 +84,8 @@ def test_record_label_and_replay_round_trip(client, tmp_path):
     wait_for(lambda: client.get("/api/status").json()["recording"]["rows"] >= 10)
     stop = client.post("/api/record/stop").json()
     assert stop["on"] is False and stop["rows"] >= 10
+    header = (tmp_path / start["file"]).read_text(encoding="utf-8").splitlines()[0]
+    assert header.split(",") == stored_columns(main.app.state.mhm.registry)   # raw rows only, no analysis
     assert client.post("/api/label", json={"label": None}).json() == {"label": None}
 
     recs = client.get("/api/recordings").json()["recordings"]
@@ -78,7 +94,9 @@ def test_record_label_and_replay_round_trip(client, tmp_path):
     # simulator -> replay -> simulator
     r = client.post("/api/source", json={"type": "replay", "file": start["file"], "speed": 20})
     assert r.status_code == 200 and r.json()["source"] == "replay"
-    wait_for(lambda: client.get("/api/status").json()["source_detail"]["finished"], timeout=3)
+    # 20x = 50 ms per row, but each row also runs ML (slower under coverage): allow for both.
+    wait_for(lambda: client.get("/api/status").json()["source_detail"]["finished"],
+             timeout=3 + 0.15 * stop["rows"])
     detail = client.get("/api/status").json()["source_detail"]
     assert detail["rows_played"] == stop["rows"]
     s = fast_sim(client, "recovery")
@@ -143,10 +161,10 @@ def test_websocket_streams_rows_with_device_block(client):
         msg = next(m for m in (ws.receive_json() for _ in range(50)) if m["type"] == "row")
     assert msg["mode"] == "simulated"
     assert list(msg["row"]) == stored_columns(main.app.state.mhm.registry)
-    dev = msg["device"]
-    assert {"state", "reason", "reasons", "clearing", "hold_remaining_s", "hold_seconds",
-            "device_reported", "agrees"} <= set(dev)
+    dev = msg["analysis"]["device"]
+    assert set(dev) == {"state", "reported", "reason", "hold_remaining_s", "agrees"}
     assert dev["agrees"] is True and dev["state"] == msg["row"]["dev_state"]
+    assert {"overall", "alert_source", "headline", "ml", "forecast"} <= set(msg["analysis"])
 
 
 def test_websocket_gets_status_on_source_change(client):

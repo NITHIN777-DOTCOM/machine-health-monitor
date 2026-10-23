@@ -27,7 +27,8 @@
       "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "core",
       "enabled": true,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "forecast": true
     },
     {
       "key": "humidity",
@@ -42,7 +43,8 @@
       "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "core",
       "enabled": true,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "forecast": true
     },
     {
       "key": "sound_peak",
@@ -57,7 +59,8 @@
       "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "core",
       "enabled": true,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "forecast": false
     },
     {
       "key": "vib_count",
@@ -72,7 +75,8 @@
       "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "core",
       "enabled": true,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "forecast": false
     },
     {
       "key": "leak_raw",
@@ -86,7 +90,8 @@
       "hysteresis": null,
       "tier": "optional",
       "enabled": false,
-      "include_in_ml": true
+      "include_in_ml": true,
+      "forecast": false
     },
     {
       "key": "distance_cm",
@@ -101,6 +106,7 @@
       "tier": "optional",
       "enabled": false,
       "include_in_ml": true,
+      "forecast": false,
       "comment": "direction TBD: may need to be \"below\" (object too close) once limits are chosen"
     },
     {
@@ -116,6 +122,7 @@
       "tier": "optional",
       "enabled": false,
       "include_in_ml": false,
+      "forecast": false,
       "group": "ina219"
     },
     {
@@ -131,6 +138,7 @@
       "tier": "optional",
       "enabled": false,
       "include_in_ml": false,
+      "forecast": false,
       "group": "ina219"
     }
   ]

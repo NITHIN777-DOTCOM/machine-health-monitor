@@ -40,8 +40,14 @@ class Settings:
     forecast_window_s: int = 60      # forecast: linear fit over this many device-clock seconds
     forecast_min_r2: float = 0.6     # forecast: minimum fit quality to report a time-to-limit
     forecast_cap_s: int = 1800       # forecast: longer predictions are shown as "> 30 min"
+    ml_anomaly_health: float = 50    # ML ANOMALY after health < this ...
+    ml_anomaly_rows: int = 3         # ... for this many consecutive rows
+    ml_clear_health: float = 60      # ANOMALY clears after health > this ...
+    ml_clear_rows: int = 5           # ... for this many consecutive rows
+    warmstart_file: str | None = None  # recording (in data/recordings) to warm-start from on startup
     max_speed: float = 20.0
     recordings_dir: Path = field(default=RECORDINGS_DIR)
+    models_dir: Path = field(default=MODELS_DIR)
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> Settings:
@@ -50,7 +56,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         for key, value in data.items():
-            if hasattr(settings, key) and key not in ("recordings_dir", "env_port"):
+            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "env_port"):
                 setattr(settings, key, value)
             else:
                 log.warning("settings.json: unknown key %r ignored", key)

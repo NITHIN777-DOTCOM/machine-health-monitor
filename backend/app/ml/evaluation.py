@@ -8,7 +8,13 @@ stamped "SIMULATED DATA - NOT A RESULT".
 Definitions (one "window" = the feature window ending at a row; rows where the ML
 window is still warming up, and rows labelled "unknown", are not evaluated):
   detection rate    = flagged fault windows / fault windows
-  false alarm rate  = flagged normal windows / normal windows
+  false alarm rate  = flagged normal windows / normal windows, EXCLUDING normal windows
+                      within a margin of (window_s + hold_seconds) after a fault period
+                      ends (main figure). Reason: for that long after a fault the ML
+                      window still contains fault values and the device rules are still
+                      holding their state by design, so flags there are expected
+                      after-effects of the fault, not false alarms.
+  false alarm (raw) = the same without the margin, reported alongside for transparency
   episode           = a run of consecutive label=fault rows in one recording
   detection delay   = seconds (device clock) from an episode's first row to the first
                       flagged window inside it; episodes never flagged count as missed
@@ -84,7 +90,10 @@ class Episode:
 def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: Settings) -> dict[str, Any]:
     ml_on = scorer is not None and scorer.ready
     dets = [d for d in DETECTORS if d != "ml" or ml_on]
-    counts = {d: {"fault": 0, "fault_flagged": 0, "normal": 0, "normal_flagged": 0} for d in dets}
+    counts = {d: {"fault": 0, "fault_flagged": 0, "normal": 0, "normal_flagged": 0,
+                  "normal_raw": 0, "normal_raw_flagged": 0} for d in dets}
+    window_s = scorer.meta["window_s"] if ml_on else settings.ml_window_s
+    margin_ms = (window_s + settings.hold_seconds) * 1000
     episodes: list[Episode] = []
 
     for seg in dataset.segments:
@@ -92,8 +101,10 @@ def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: S
             ml_sensor_keys(registry), settings.ml_window_s, settings.ml_max_missing_frac)
         hist: deque = deque()
         ep: Episode | None = None
+        last_fault_ms: int | None = None
         for row in seg.rows:
             if row.label == "fault":
+                last_fault_ms = row.ms
                 if ep is None:
                     ep = Episode(seg.file, row.ms, row.ms, {d: None for d in dets})
                     episodes.append(ep)
@@ -114,12 +125,20 @@ def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: S
             }
             if ml_on:
                 flags["ml"] = scorer.score(feats)["ml_status"] == ANOMALY
+            in_margin = (row.label == "normal" and last_fault_ms is not None
+                         and row.ms - last_fault_ms <= margin_ms)
             for d in dets:
-                counts[d][row.label] += 1
-                if flags[d]:
-                    counts[d][f"{row.label}_flagged"] += 1
-                    if ep is not None and ep.first_flag_ms[d] is None:
+                if row.label == "fault":
+                    counts[d]["fault"] += 1
+                    counts[d]["fault_flagged"] += flags[d]
+                    if flags[d] and ep is not None and ep.first_flag_ms[d] is None:
                         ep.first_flag_ms[d] = row.ms
+                else:
+                    counts[d]["normal_raw"] += 1
+                    counts[d]["normal_raw_flagged"] += flags[d]
+                    if not in_margin:
+                        counts[d]["normal"] += 1
+                        counts[d]["normal_flagged"] += flags[d]
 
     metrics = {}
     for d in dets:
@@ -129,11 +148,12 @@ def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: S
             **c,
             "detection_rate": c["fault_flagged"] / c["fault"] if c["fault"] else None,
             "false_alarm_rate": c["normal_flagged"] / c["normal"] if c["normal"] else None,
+            "false_alarm_rate_raw": c["normal_raw_flagged"] / c["normal_raw"] if c["normal_raw"] else None,
             "episodes": len(episodes),
             "episodes_detected": len(delays),
             "mean_delay_s": sum(delays) / len(delays) if delays else None,
         }
-    return {"detectors": dets, "metrics": metrics, "episodes": episodes,
+    return {"detectors": dets, "metrics": metrics, "episodes": episodes, "margin_s": margin_ms / 1000,
             "ml_status": scorer.status if scorer else "NO_MODEL",
             "ml_message": scorer.message if scorer else "no model loaded"}
 
@@ -153,11 +173,14 @@ def format_lines(result: dict[str, Any], *, simulated: bool) -> list[str]:
     lines = []
     if result["ml_status"] != "READY":
         lines.append(f"ML not evaluated: {result['ml_status']} ({result['ml_message']})")
-    lines.append(f"{'detector':16} {'detection':>10} {'false alarm':>12} {'episodes':>9} {'mean delay':>11}")
+    lines.append(f"{'detector':16} {'detection':>10} {'false alarm':>12} {'(raw)':>8} {'episodes':>9} {'mean delay':>11}")
     for d in result["detectors"]:
         m = result["metrics"][d]
         lines.append(f"{d:16} {_pct(m['detection_rate']):>10} {_pct(m['false_alarm_rate']):>12} "
+                     f"{_pct(m['false_alarm_rate_raw']):>8} "
                      f"{m['episodes_detected']:>4}/{m['episodes']:<4} {_sec(m['mean_delay_s']):>11}")
+    lines.append(f"false alarm excludes {result['margin_s']:.0f} s after each fault period "
+                 f"(window + hold time, expected after-effects); (raw) includes them")
     lead = forecast_lead(result)
     if lead is not None:
         lines.append(f"forecast predicted CRITICAL on average {lead:.1f} s before the rules reached CRITICAL "
@@ -186,13 +209,19 @@ def format_report(result: dict[str, Any], *, files: list[str], counts: dict[str,
                    f"sensors {model_info.get('sensors')}, window {model_info.get('window_s')} s, "
                    f"provisional: {model_info.get('provisional')}\n")
     out += ["\n## Metrics\n\n", banner,
-            "| Detector | Detection rate | False alarm rate | Episodes detected | Mean detection delay |\n",
-            "|---|---|---|---|---|\n"]
+            f"| Detector | Detection rate | False alarm rate (excl. {result['margin_s']:.0f} s margin) | "
+            "False alarm rate (raw) | Episodes detected | Mean detection delay |\n",
+            "|---|---|---|---|---|---|\n"]
     for d in result["detectors"]:
         m = result["metrics"][d]
         out.append(f"| {d} | {_pct(m['detection_rate'])} ({m['fault_flagged']}/{m['fault']}) | "
                    f"{_pct(m['false_alarm_rate'])} ({m['normal_flagged']}/{m['normal']}) | "
+                   f"{_pct(m['false_alarm_rate_raw'])} ({m['normal_raw_flagged']}/{m['normal_raw']}) | "
                    f"{m['episodes_detected']}/{m['episodes']} | {_sec(m['mean_delay_s'])} |\n")
+    out.append(f"\nThe main false alarm rate leaves out normal windows in the {result['margin_s']:.0f} s "
+               "(feature window + device hold time) after each fault period: there the ML window still "
+               "contains fault values and the rules are still holding their state by design. The raw rate "
+               "counts them too.\n")
     if result["ml_status"] != "READY":
         out.append(f"\nML not evaluated: {result['ml_status']} ({result['ml_message']})\n")
     lead = forecast_lead(result)

@@ -18,22 +18,23 @@ log = logging.getLogger(__name__)
 
 
 class RingBuffer:
-    """Rows from the last `seconds` of wall-clock time (by arrival time)."""
+    """Rows (with their live analysis) from the last `seconds` of wall-clock time."""
 
     def __init__(self, seconds: float, max_speed: float):
         self.seconds = seconds
         # Cap the length so 10x/20x replay or simulation can't grow memory without bound.
-        self._rows: deque[tuple[float, SensorRow]] = deque(maxlen=int(seconds * max(1.0, max_speed)) + 1)
+        self._rows: deque[tuple[float, SensorRow, dict[str, Any] | None]] = deque(
+            maxlen=int(seconds * max(1.0, max_speed)) + 1)
 
-    def append(self, row: SensorRow) -> None:
+    def append(self, row: SensorRow, analysis: dict[str, Any] | None = None) -> None:
         now = time.monotonic()
-        self._rows.append((now, row))
+        self._rows.append((now, row, analysis))
         while self._rows and self._rows[0][0] < now - self.seconds:
             self._rows.popleft()
 
-    def since(self, seconds: float) -> list[SensorRow]:
+    def since(self, seconds: float) -> list[tuple[SensorRow, dict[str, Any] | None]]:
         cutoff = time.monotonic() - seconds
-        return [row for t, row in self._rows if t >= cutoff]
+        return [(row, analysis) for t, row, analysis in self._rows if t >= cutoff]
 
     def clear(self) -> None:
         self._rows.clear()

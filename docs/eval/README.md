@@ -18,3 +18,9 @@ Each report lists the files used, row counts by source and label, the model's
 provisional flag, and per detector (ML, rules, rules CRITICAL only, forecast): detection
 rate, false alarm rate, episodes detected and mean detection delay, plus a per-episode
 table.
+
+**False alarm margin.** The main false alarm rate leaves out the normal windows in the
+first window + hold seconds (10 + 5 = 15 s) after each fault period ends. For that long
+the ML window still contains fault values and the device rules are still holding their
+state by design, so a flag there is an after-effect of the real fault, not a false alarm.
+The raw rate, which counts them, is reported next to it.

@@ -126,14 +126,19 @@ auto-detection.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET  | `/api/status` | Source, scenario, speed, serial port, connected, last error, recording, rows received/rejected. |
+| GET  | `/api/status` | Source, scenario, speed, serial port, connected, last error, recording, rows received/rejected, latest `analysis`, `model`, `warm_start`, `analysis_timing_ms`. |
 | GET  | `/api/sensors` | The sensor registry (the dashboard builds itself from this). |
-| GET  | `/api/history?seconds=N` | Rows from the last N seconds (up to 10 minutes kept in memory). |
-| POST | `/api/source` | `{type, scenario?, speed?, file?, loop?}`: switch source without restarting. |
+| GET  | `/api/history?seconds=N&detail=compact` | Rows from the last N seconds (up to 10 minutes kept in memory), each with its analysis: `compact` (overall, ML status, health, forecast seconds; for trend charts, default), `full` or `none`. |
+| POST | `/api/source` | `{type, scenario?, speed?, file?, loop?, warmstart?}`: switch source without restarting; `warmstart` pre-fills the ML/forecast windows from a recording before the first row. |
+| POST | `/api/warmstart` | `{file}`: warm-start the current source from a recording (applied at the next row). |
+| GET  | `/api/model` | Model summary: status, sensors, trained_on (real vs synthetic rows), provisional, created, calibration. |
+| POST | `/api/model/reload` | Reload `models/` from disk without restarting. |
+| POST | `/api/model/train` | `{files: [...]}` (names in data/recordings): train in the background, then reload. Returns a job id (202). |
+| GET  | `/api/model/train/{id}` | Training job progress: status (queued/running/done/failed), step, elapsed, result. |
 | POST | `/api/record/start`, `/api/record/stop` | Start/stop recording. |
 | POST | `/api/label` | `{label}`: label for live rows. |
 | GET  | `/api/recordings` | Recording files with size, row count and duration. |
-| WS   | `/ws/stream` | Messages: `{"type":"row","mode":...,"row":{...},"device":{...}}` and `{"type":"status","status":{...}}`. |
+| WS   | `/ws/stream` | Messages: `{"type":"row","mode":...,"row":{...},"analysis":{...}}` and `{"type":"status","status":{...}}`. |
 
 `connected` in `/api/status` is debounced: it stays `true` while a new source starts up
 and while rows arrive, and only turns `false` after `link_grace_s` (3) seconds without
@@ -141,41 +146,62 @@ data or with a port error, so the dashboard doesn't flash "disconnected" on ever
 switch. `link` gives the detail: `starting`, `ok`, `no_data`, `down` or `finished`, plus
 `data_age_s`.
 
-`device` (on every row and in `/api/status`) is the state machine snapshot: `state`,
-`reason` / `reasons` (which sensor and limit), `clearing`, `hold_remaining_s`,
-`last_change`, `device_reported` (the row's own `dev_state`) and `agrees`. Rules:
-[DATA_CONTRACT.md section 3](../docs/DATA_CONTRACT.md#dev_state-device-side-rules).
+`analysis` (on every WebSocket row, in `/api/status` and in `/api/history?detail=full`):
+
+```
+overall        NORMAL | WARNING | CRITICAL   worse of rules and ML; ML alone can only give WARNING
+alert_source   rules | ml | both | none
+headline       e.g. "Vibration high - ML anomaly (health 34)", "Temperature rising - CRITICAL in ~2 min"
+device         {state, reported, reason, hold_remaining_s, agrees}   device-rule mirror
+ml             {status, health, causes[2]{sensor, direction, z, text}, provisional,
+                warmup_remaining_s, settling_remaining_s, clear_remaining_s, instant, message}
+forecast       {temp_c: {trend, status, seconds_to_warn, seconds_to_critical,
+                to_warn, to_critical ("~2 min"), text, r2}, humidity: {...}}
+warm_start     "warm-started from <file>" or null
+```
+
+ML status: `OK`, `ANOMALY`, `WARMING_UP` (window not full; `warmup_remaining_s`),
+`ML_UNAVAILABLE` (an ML sensor is missing too much, e.g. DHT11 fault), `NO_MODEL`,
+`NEEDS_RETRAIN` (the registry's ML sensors differ from the model's). It is smoothed:
+ANOMALY after health < 50 for 3 rows, clears after health > 60 for 5 rows
+(`ml_anomaly_*` / `ml_clear_*` in settings.json). Full rules:
+[DATA_CONTRACT.md section 9](../docs/DATA_CONTRACT.md#9-live-analysis-backend).
+
+Per-row cost of features + score + forecast: about 20 ms on average, about 36 ms at p95
+on the dev laptop (`analysis_timing_ms` in `/api/status`).
 
 ## Watching the stream: `ws_peek.py`
 
 With the backend running, print rows from the WebSocket in a compact table:
 
 ```
-python scripts/ws_peek.py -n 30            # 30 rows
-python scripts/ws_peek.py --changes -n 15  # only rows where the state or hold timer changes
+python scripts/ws_peek.py -n 30                       # 30 rows
+python scripts/ws_peek.py --changes --headlines -n 40  # only changes, with the headline
 ```
 
-Example (`recovery` scenario at 5x):
+Example (`recovery` scenario at 5x, headlines shortened):
 
 ```
-     t  temp   hum sound  vib  dev_state mirror    hold  label   reason
-    20  28.5  61.9   124   81  CRITICAL  CRITICAL     -  fault   Sound level (peak deviation) 124 >= crit 120; Vibration 81 >= crit 60
-    50  28.5  59.5     5    5  CRITICAL  CRITICAL     4  normal  recovering, was: ...
-    53  29.1  59.8     6    1  CRITICAL  CRITICAL     1  normal  recovering, was: ...
-    54  28.6  59.3     4    3  WARNING   WARNING      5  normal  recovering, was: ...
-    58  28.7    56     6    3  WARNING   WARNING      1  normal  recovering, was: ...
-    59  28.8  59.4     6    3  NORMAL    NORMAL       -  normal
+    t  temp  snd  vib  dev      overall  src   ml       hlth hold  cause                temp fc   | headline
+   20  28.6  146   73  CRITICAL CRITICAL rules OK          0    -  Sound level (p +99   -   | Sound level ... 146 >= crit 120; Vibration 73 >= crit 60 - CRITICAL
+   22  28.5  150   70  CRITICAL CRITICAL both  ANOMALY     0    -  Sound level (p +99   -   | ... - CRITICAL; ML anomaly (health 0)
+   50  28.5    4    1  CRITICAL CRITICAL both  ANOMALY     0    4  Sound level (p +99   stable   | recovering, was: ... - CRITICAL; ML anomaly (health 0)
+   54  28.7    3    3  WARNING  WARNING  both  ANOMALY     0    5  Sound level (p +99   stable   | recovering, was: ... - WARNING; ML anomaly (health 0)
+   59  28.8    4    2  NORMAL   WARNING  ml    ANOMALY   100    -  Vibration unst +2    stable   | Back to normal - ML anomaly clearing in 4 s (health 100)
+   63  29.1    4    3  NORMAL   NORMAL   none  OK        100    -  Vibration unst +3    stable   | All normal (health 100)
 ```
 
-## ML engine (offline; wired into the live pipeline in Phase 3.2)
+## ML engine
 
 | File | Role |
 |---|---|
 | `app/ml/features.py` | `FeatureWindow`: per ML sensor mean, std, min, max, slope (per second), last over the last `ml_window_s` (10) seconds of the **device clock**. Returns `None` ("warming up") until the window is full or if a sensor is missing in more than 30% of it. Used by training, evaluation **and** live scoring. |
 | `app/ml/training.py` | IsolationForest on `label=normal` windows only, health calibration, `model_meta.json`. |
 | `app/ml/scorer.py` | `Scorer.score(features)` returns `ml_status` (OK / ANOMALY / WARMING_UP / NO_MODEL / NEEDS_RETRAIN), `health` 0–100, top-2 `causes` ("Vibration high", z), `provisional`. A model trained on other sensors returns NEEDS_RETRAIN and never crashes. |
-| `app/ml/forecast.py` | Linear trend over the last 60 s per sensor with limits: seconds to WARNING / CRITICAL (direction aware; R² ≥ 0.6; "> 30 min" cap) or "stable". Needs no model. |
-| `app/ml/evaluation.py` | ML vs rules vs forecast metrics. Real rows only unless `--dev-synthetic`. |
+| `app/ml/forecast.py` | Linear trend over the last 60 s for sensors with `"forecast": true` (temperature, humidity): seconds to WARNING / CRITICAL (direction aware; R² ≥ 0.6), shown rounded ("< 1 min", "~2 min", "> 30 min"). Needs no model. |
+| `app/ml/evaluation.py` | ML vs rules vs forecast metrics. Real rows only unless `--dev-synthetic`. False alarms exclude a margin of window + hold (15 s) after each fault; the raw rate is reported alongside. |
+| `app/ml/jobs.py` | Background training jobs for `POST /api/model/train`. |
+| `app/analysis.py` | Live per-row analysis: ML smoothing, overall status, alert source, headline, warm start. |
 
 Data rules, enforced in code:
 - Training uses only `label=normal` rows. Synthetic data may be used for training only;
@@ -195,7 +221,9 @@ python scripts/evaluate.py --dev-synthetic "../data/synthetic/devfault_*.csv"   
 ```
 
 Settings (`config/settings.json`): `ml_window_s`, `ml_max_missing_frac`,
-`forecast_window_s`, `forecast_min_r2`, `forecast_cap_s`.
+`forecast_window_s`, `forecast_min_r2`, `forecast_cap_s`, `ml_anomaly_health`,
+`ml_anomaly_rows`, `ml_clear_health`, `ml_clear_rows`, `warmstart_file` (a recording in
+data/recordings to warm-start from on every startup; `null` = off).
 
 ## Tests
 

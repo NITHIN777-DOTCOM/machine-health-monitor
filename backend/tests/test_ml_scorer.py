@@ -1,6 +1,4 @@
 """Training rules, health calibration, and the scorer's status handling."""
-import json
-
 import numpy as np
 import pytest
 
@@ -8,33 +6,7 @@ from app.ml import training
 from app.ml.dataset import Dataset, Segment
 from app.ml.features import FeatureWindow
 from app.ml.scorer import ANOMALY, NEEDS_RETRAIN, NO_MODEL, OK, WARMING_UP, Scorer, health_from_score
-from app.models import ParseStats
-from app.registry import Registry
-from app.sources.simulator import SimulatorSource, load_profile
-
-
-def sim_rows(registry, scenario, seconds, seed, source="synthetic"):
-    sim = SimulatorSource(registry=registry, stats=ParseStats(), scenario=scenario,
-                          profile=load_profile(), seed=seed)
-    rows = []
-    for _ in range(seconds):
-        r = sim.make_row()
-        r.source = source
-        rows.append(r)
-        sim.elapsed_s += 1
-    return rows
-
-
-@pytest.fixture(scope="session")
-def reg(sensors_data):
-    return Registry.from_dict(json.loads(json.dumps(sensors_data)))
-
-
-@pytest.fixture(scope="session")
-def trained(reg):
-    data = Dataset(["a", "b"], [Segment("a", sim_rows(reg, "normal", 600, 1)),
-                                Segment("b", sim_rows(reg, "normal", 600, 2))])
-    return training.train(data, reg, window_s=10, n_estimators=60)
+from helpers import sim_rows
 
 
 @pytest.fixture

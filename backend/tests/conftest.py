@@ -9,7 +9,9 @@ import pytest
 from app.config import SENSORS_PATH
 from app.registry import Registry
 from app.sources.simulator import load_profile
-from helpers import run_scenario
+from app.ml import training
+from app.ml.dataset import Dataset, Segment
+from helpers import run_scenario, sim_rows
 
 
 @pytest.fixture(scope="session")
@@ -45,3 +47,17 @@ def run_sim(registry, profile):
     def _run(scenario, seconds, seed=0, reg=None, **kwargs):
         return run_scenario(reg or registry, profile, scenario, seconds, seed, **kwargs)
     return _run
+
+
+@pytest.fixture(scope="session")
+def reg(sensors_data) -> Registry:
+    """Session-wide copy of the real registry (for session-scoped fixtures)."""
+    return Registry.from_dict(copy.deepcopy(sensors_data))
+
+
+@pytest.fixture(scope="session")
+def trained(reg):
+    """(model, meta) trained once on 20 min of simulated normal data (60 trees, for speed)."""
+    data = Dataset(["a", "b"], [Segment("a", sim_rows(reg, "normal", 600, 1)),
+                                Segment("b", sim_rows(reg, "normal", 600, 2))])
+    return training.train(data, reg, window_s=10, n_estimators=60)

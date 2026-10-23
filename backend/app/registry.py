@@ -37,6 +37,7 @@ class Sensor:
     tier: str
     enabled: bool              # effective value (False if its group is in conflict)
     include_in_ml: bool
+    forecast: bool = False     # show a time-to-limit trend forecast for this sensor
     group: str | None = None
     comment: str | None = None
     limits_note: str | None = None
@@ -66,6 +67,7 @@ class Sensor:
             "enabled_in_config": self.enabled_in_config,
             "include_in_ml": self.include_in_ml,
             "in_ml": self.in_ml,
+            "forecast": self.forecast,
             "group": self.group,
             "comment": self.comment,
             "limits_note": self.limits_note,
@@ -171,6 +173,7 @@ class Registry:
                 "tier": tier,
                 "enabled": bool(raw.get("enabled", False)),
                 "include_in_ml": bool(raw.get("include_in_ml", False)),
+                "forecast": bool(raw.get("forecast", False)),
                 "group": raw.get("group") or None,
                 "comment": raw.get("comment") or None,
                 "limits_note": raw.get("limits_note") or None,

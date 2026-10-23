@@ -56,10 +56,14 @@ class FeatureWindow:
         self.max_missing_frac = max_missing_frac
         self._buf: deque[tuple[int, Mapping[str, float | None]]] = deque()
         self._first_ms: int | None = None
+        self._last_ms: int | None = None
+        self.missing: list[str] = []      # sensors missing too much in the last full window
 
     def reset(self) -> None:
         self._buf.clear()
         self._first_ms = None
+        self._last_ms = None
+        self.missing = []
 
     def push_row(self, row) -> dict[str, float] | None:
         """Convenience for SensorRow-like objects (with .ms and .values)."""
@@ -72,6 +76,7 @@ class FeatureWindow:
             self.reset()
         if self._first_ms is None:
             self._first_ms = ms
+        self._last_ms = ms
         self._buf.append((ms, values))
         while self._buf and self._buf[0][0] <= ms - self.window_ms:
             self._buf.popleft()
@@ -84,13 +89,21 @@ class FeatureWindow:
         return (self._first_ms is not None and self._buf
                 and self._buf[-1][0] - self._first_ms >= self.window_ms - self.period_ms)
 
+    @property
+    def warmup_remaining_s(self) -> float:
+        """Seconds of data still needed before the first full window."""
+        covered = 0 if self._first_ms is None else self._last_ms - self._first_ms + self.period_ms
+        return max(0.0, (self.window_ms - covered) / 1000.0)
+
     def _compute(self, now_ms: int) -> dict[str, float] | None:
         out: dict[str, float] = {}
+        self.missing = []
         for key in self.sensors:
             pts = [(ms, vals.get(key)) for ms, vals in self._buf if vals.get(key) is not None]
             missing = 1.0 - len(pts) / self.expected
             if missing > self.max_missing_frac + 1e-9 or len(pts) < 2:
-                return None
+                self.missing.append(key)
+                continue
             t = np.array([(ms - now_ms) / 1000.0 for ms, _ in pts])
             v = np.array([float(x) for _, x in pts])
             tc = t - t.mean()
@@ -102,7 +115,7 @@ class FeatureWindow:
             out[f"{key}__max"] = float(v.max())
             out[f"{key}__slope"] = slope
             out[f"{key}__last"] = float(v[-1])
-        return out
+        return None if self.missing else out
 
 
 def to_vector(features: Mapping[str, float], names: Sequence[str]) -> np.ndarray:

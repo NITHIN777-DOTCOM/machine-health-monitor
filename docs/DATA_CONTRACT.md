@@ -261,6 +261,7 @@ Fields of each sensor entry:
 | `tier`          | `core` / `optional` | Core sensors must work in the final build; optional ones may be left out. |
 | `enabled`       | boolean         | Whether this sensor is fitted in the current build. `false` → dashboard shows "not connected". |
 | `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled; see section 6). |
+| `forecast`      | boolean         | Whether the backend shows a time-to-limit trend forecast for this sensor. `true` for slow signals (temperature, humidity); `false` for spiky event signals (sound, vibration), where a straight-line trend misleads. |
 | `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
 | `hysteresis`    | number or null  | De-escalation margin `h` (section 3): to leave a level, the value must be clear of the limit by `h`, in the limit's direction. `null` = no margin. |
 | `limits_note`   | string, optional | Where the limits come from, e.g. "provisional demo limit - retune from real data in Phase 8". The dashboard can show it next to the limits. |
@@ -309,3 +310,35 @@ Deploying the monitor on an actual machine requires:
 3. **Retraining the ML model** on that machine's data.
 
 **The demo limits and the demo model must not be reused as-is on real equipment.**
+
+## 9. Live analysis (backend)
+
+For every row the backend adds an `analysis` block (WebSocket rows, `/api/status`,
+`/api/history`). It is **never** written to recordings: those stay raw contract rows,
+so they remain clean training data and the analysis can always be recomputed.
+
+**Three opinions, one overall status.**
+
+| Part | What it says | Can make the overall status |
+|---|---|---|
+| Device rules (`dev_state`) | Limits and sensor faults, section 3 | NORMAL, WARNING, CRITICAL |
+| ML (`ml.status`) | The pattern of the last 10 s differs from normal | at most **WARNING** |
+| Forecast | Time until a limit is reached, for `forecast: true` sensors | nothing (shown as advice) |
+
+- `overall` = the worse of the rules state and the ML verdict. **ML is advisory**: an ML
+  ANOMALY can raise the overall status to WARNING, never to CRITICAL. Only the threshold
+  rules can make it CRITICAL.
+- `alert_source` = `rules`, `ml`, `both` or `none`, and `headline` is one human sentence,
+  e.g. "Vibration high - ML anomaly (health 34)" or "Temperature rising - CRITICAL in ~2 min".
+
+**ML status** is one of `OK`, `ANOMALY`, `WARMING_UP` (window not full yet; seconds left
+are shown), `ML_UNAVAILABLE` (an ML sensor is missing in more than 30% of the window,
+e.g. a DHT11 fault), `NO_MODEL`, `NEEDS_RETRAIN` (the registry's ML sensors differ from
+the model's; ML is off and the rules keep working). It is smoothed so it cannot flicker:
+it becomes ANOMALY only after health < 50 for 3 consecutive rows and clears only after
+health > 60 for 5 consecutive rows.
+
+**Warm start.** A recording's last W + 60 s can pre-fill the ML window and the forecast
+history, so a new source doesn't start with "warming up". For the first W live rows the
+ML window mixes recorded and live data, so ML shows "settling" without a health value and
+cannot raise an alarm; the forecast works from the first row.
