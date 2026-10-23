@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        await pipeline.stop()
+        await pipeline.shutdown()
         state.recorder.stop()
 
 

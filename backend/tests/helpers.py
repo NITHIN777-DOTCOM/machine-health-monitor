@@ -11,6 +11,27 @@ from app.sources.simulator import SimulatorSource
 RANK = {"NORMAL": 0, "WARNING": 1, "CRITICAL": 2}
 
 
+def sensor(key, warn, critical, direction="above", hysteresis=None, tier="core", enabled=True, **kw):
+    """A sensors.json entry for a fake registry."""
+    return {"key": key, "display_name": key.upper(), "hardware": key.upper() + "-HW", "warn": warn,
+            "critical": critical, "direction": direction, "hysteresis": hysteresis, "tier": tier,
+            "enabled": enabled, "include_in_ml": True, **kw}
+
+
+def make_reg(*sensors) -> Registry:
+    return Registry.from_dict({
+        "csv_columns": ["ms", *[s["key"] for s in sensors], "dev_state"],
+        "sensors": list(sensors),
+    })
+
+
+def rows_from(values: list[dict], *, step_ms: int = 1000, start_ms: int = 0, **meta) -> list[SensorRow]:
+    """SensorRows at a fixed device-clock step from a list of value dicts."""
+    return [SensorRow(ms=start_ms + i * step_ms, values=v, dev_state=meta.get("dev_state", "NORMAL"),
+                      mode=meta.get("mode", "live"), source=meta.get("source", "real"),
+                      label=meta.get("label", "normal")) for i, v in enumerate(values)]
+
+
 def run_scenario(registry: Registry, profile: dict, scenario: str, seconds: int, seed: int = 0,
                  hold_seconds: int = 5) -> tuple[list[SensorRow], list[dict[str, Any]]]:
     """Step the simulator `seconds` times directly (no asyncio, no sleeping)."""

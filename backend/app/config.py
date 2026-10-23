@@ -34,6 +34,12 @@ class Settings:
     reconnect_interval_s: float = 2.0
     history_seconds: int = 600
     hold_seconds: int = 5            # device state: rows a level must stay clear before stepping down
+    link_grace_s: float = 3.0        # seconds without data (or with a port error) before "disconnected"
+    ml_window_s: int = 10            # ML feature window, device-clock seconds
+    ml_max_missing_frac: float = 0.3 # a sensor missing in more than this share of the window -> warming up
+    forecast_window_s: int = 60      # forecast: linear fit over this many device-clock seconds
+    forecast_min_r2: float = 0.6     # forecast: minimum fit quality to report a time-to-limit
+    forecast_cap_s: int = 1800       # forecast: longer predictions are shown as "> 30 min"
     max_speed: float = 20.0
     recordings_dir: Path = field(default=RECORDINGS_DIR)
 

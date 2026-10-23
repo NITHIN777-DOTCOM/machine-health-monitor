@@ -113,7 +113,8 @@ class SimulatorSource(Source):
         """Effects: empty, add, ramp_add, ramp_to, noise. ('steady' is handled in _baseline.)
 
         'add' is a step: full strength from the start until recovery begins, then it fades
-        with the envelope. 'ramp_add' / 'ramp_to' follow the envelope throughout.
+        with the envelope. 'ramp_add' / 'ramp_to' follow the envelope throughout. 'noise'
+        behaves like the effect it belongs to (step for 'add', envelope otherwise).
         """
         if effect.get("empty"):
             return None
@@ -126,7 +127,9 @@ class SimulatorSource(Source):
         if "ramp_to" in effect:
             value += (effect["ramp_to"] - cfg.get("mean", value)) * env
         if "noise" in effect:
-            value += self.rng.gauss(0, effect["noise"]) * step
+            # Extra noise follows the effect: full at once for a step ("add"), growing with
+            # the envelope for a ramp, so a slow drift doesn't start with a sudden jitter jump.
+            value += self.rng.gauss(0, effect["noise"]) * (step if "add" in effect else env)
         return value
 
     def make_row(self) -> SensorRow:

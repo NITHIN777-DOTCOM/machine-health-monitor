@@ -1,0 +1,150 @@
+"""Train the IsolationForest anomaly model on NORMAL rows only.
+
+Health calibration (stored in model_meta.json, used by scorer.health_from_score):
+  s = IsolationForest score_samples() of a window (higher = more normal)
+  m = median score of the training (normal) windows          -> health 100
+  t = the model's decision threshold (offset_, ~1% quantile) -> health 50
+  a = t - (m - t), as far below the threshold as the median is above it -> health 0
+  health = 50 + 50 * (s - t) / (m - t), clamped to 0..100
+So a typical normal window scores ~100, the boundary the model was fitted to is 50, and
+anything at least "one normal spread" beyond the boundary is 0.
+
+Range excess: IsolationForest cannot tell HOW FAR outside the training range a value is
+(a vibration of 80 lands in the same leaf as the largest normal value, 7). So the scorer
+also measures, per feature, how many training standard deviations the value lies beyond
+the training min/max, takes the largest of these ("excess"), and subtracts
+50 * excess / STDS_PER_50_HEALTH from the health. Training windows have excess 0 by
+definition, so the calibration above is unchanged.
+"""
+from __future__ import annotations
+
+import json
+import platform
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import joblib
+import numpy as np
+import sklearn
+from sklearn.ensemble import IsolationForest
+
+from ..registry import Registry
+from .dataset import Dataset
+from .features import FeatureWindow, feature_names, ml_sensor_keys
+from .scorer import health_from_score
+
+MIN_WINDOWS = 50
+STD_FLOOR = 1e-3
+STDS_PER_50_HEALTH = 3.0   # range excess that costs 50 health points
+
+
+class TrainingError(Exception):
+    pass
+
+
+def build_training_matrix(dataset: Dataset, sensors: list[str], window_s: float,
+                          max_missing_frac: float) -> tuple[np.ndarray, dict[str, Any]]:
+    """Window features from label=normal rows only. Any other row breaks the window, so
+    no training window ever contains a fault or unknown row."""
+    names = feature_names(sensors)
+    X: list[list[float]] = []
+    rows_used: Counter = Counter()
+    windows: Counter = Counter()
+    skipped: Counter = Counter()
+    for seg in dataset.segments:
+        fw = FeatureWindow(sensors, window_s, max_missing_frac)
+        for row in seg.rows:
+            if row.label != "normal":
+                skipped[row.label] += 1
+                fw.reset()
+                continue
+            rows_used[row.source] += 1
+            feats = fw.push_row(row)
+            if feats is not None:
+                X.append([feats[n] for n in names])
+                windows[row.source] += 1
+    info = {
+        "rows_normal_by_source": {"real": rows_used.get("real", 0), "synthetic": rows_used.get("synthetic", 0)},
+        "windows_by_source": {"real": windows.get("real", 0), "synthetic": windows.get("synthetic", 0)},
+        "rows_skipped_not_normal": dict(skipped),
+    }
+    return np.array(X, dtype=float).reshape(-1, len(names)), info
+
+
+def calibrate(scores: np.ndarray, threshold: float) -> dict[str, float]:
+    median = float(np.median(scores))
+    if median <= threshold:                      # degenerate: keep the map well-defined
+        median = threshold + 1e-6
+    return {
+        "median_score": median,
+        "threshold_score": float(threshold),
+        "abnormal_score": float(threshold - (median - threshold)),
+        "rule": "health = 50 + 50*(score - threshold)/(median - threshold), clamped 0..100; "
+                "100 at the median normal score, 50 at the decision threshold, 0 at threshold - (median - threshold)",
+    }
+
+
+def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_missing_frac: float = 0.3,
+          n_estimators: int = 200, contamination: float = 0.01, random_state: int = 42,
+          ) -> tuple[IsolationForest, dict[str, Any]]:
+    sensors = ml_sensor_keys(registry)
+    if not sensors:
+        raise TrainingError("No ML sensors: no sensor has enabled AND include_in_ml in sensors.json")
+    X, info = build_training_matrix(dataset, sensors, window_s, max_missing_frac)
+    if len(X) < MIN_WINDOWS:
+        raise TrainingError(f"Only {len(X)} normal windows (need at least {MIN_WINDOWS}). "
+                            "Record or generate more label=normal data.")
+
+    model = IsolationForest(n_estimators=n_estimators, contamination=contamination,
+                            random_state=random_state)
+    model.fit(X)
+    scores = model.score_samples(X)
+    cal = calibrate(scores, model.offset_)
+
+    health = np.array([health_from_score(s, cal) for s in scores])
+    names = feature_names(sensors)
+    synthetic_used = info["rows_normal_by_source"]["synthetic"] > 0
+    meta: dict[str, Any] = {
+        "created": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "model_type": "IsolationForest",
+        "params": {"n_estimators": n_estimators, "contamination": contamination, "random_state": random_state},
+        "sklearn_version": sklearn.__version__,
+        "python_version": platform.python_version(),
+        "sensors": sensors,
+        "feature_names": names,
+        "window_s": window_s,
+        "max_missing_frac": max_missing_frac,
+        "training": {
+            "files": [Path(f).name for f in dataset.files],
+            "windows": int(len(X)),
+            **info,
+        },
+        "calibration": cal,
+        "training_score_quantiles": {q: float(np.quantile(scores, float(q) / 100))
+                                     for q in ("1", "5", "50", "95", "99")},
+        "training_health": {"share_below_50": float((health < 50).mean()),
+                            "p5": float(np.quantile(health, 0.05)), "median": float(np.median(health))},
+        "normal_stats": {n: {"mean": float(X[:, i].mean()), "std": max(float(X[:, i].std()), STD_FLOOR),
+                             "min": float(X[:, i].min()), "max": float(X[:, i].max())}
+                         for i, n in enumerate(names)},
+        "range_excess": {
+            "stds_per_50_health": STDS_PER_50_HEALTH,
+            "rule": "excess = max over features of (distance beyond training min/max) / training std; "
+                    "health -= 50 * excess / stds_per_50_health",
+        },
+        "provisional": synthetic_used,
+        "provisional_reason": ("trained on synthetic data; retrain on real normal recordings (Phase 8)"
+                               if synthetic_used else None),
+    }
+    return model, meta
+
+
+def save(model: IsolationForest, meta: dict[str, Any], out_dir: Path) -> tuple[Path, Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model_path = out_dir / "model.joblib"
+    meta_path = out_dir / "model_meta.json"
+    joblib.dump(model, model_path)
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return model_path, meta_path

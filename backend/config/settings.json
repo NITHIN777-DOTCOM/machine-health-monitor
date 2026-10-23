@@ -5,5 +5,11 @@
   "reconnect_interval_s": 2.0,
   "history_seconds": 600,
   "hold_seconds": 5,
-  "max_speed": 20
+  "link_grace_s": 3.0,
+  "max_speed": 20,
+  "ml_window_s": 10,
+  "ml_max_missing_frac": 0.3,
+  "forecast_window_s": 60,
+  "forecast_min_r2": 0.6,
+  "forecast_cap_s": 1800
 }

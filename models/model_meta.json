@@ -1,0 +1,235 @@
+{
+  "created": "2026-10-23T20:16:24+05:30",
+  "model_type": "IsolationForest",
+  "params": {
+    "n_estimators": 200,
+    "contamination": 0.01,
+    "random_state": 42
+  },
+  "sklearn_version": "1.9.1",
+  "python_version": "3.11.9",
+  "sensors": [
+    "temp_c",
+    "humidity",
+    "sound_peak",
+    "vib_count"
+  ],
+  "feature_names": [
+    "temp_c__mean",
+    "temp_c__std",
+    "temp_c__min",
+    "temp_c__max",
+    "temp_c__slope",
+    "temp_c__last",
+    "humidity__mean",
+    "humidity__std",
+    "humidity__min",
+    "humidity__max",
+    "humidity__slope",
+    "humidity__last",
+    "sound_peak__mean",
+    "sound_peak__std",
+    "sound_peak__min",
+    "sound_peak__max",
+    "sound_peak__slope",
+    "sound_peak__last",
+    "vib_count__mean",
+    "vib_count__std",
+    "vib_count__min",
+    "vib_count__max",
+    "vib_count__slope",
+    "vib_count__last"
+  ],
+  "window_s": 10,
+  "max_missing_frac": 0.3,
+  "training": {
+    "files": [
+      "normal_s00.csv",
+      "normal_s01.csv",
+      "normal_s02.csv",
+      "normal_s03.csv",
+      "normal_s04.csv",
+      "normal_s05.csv"
+    ],
+    "windows": 3546,
+    "rows_normal_by_source": {
+      "real": 0,
+      "synthetic": 3600
+    },
+    "windows_by_source": {
+      "real": 0,
+      "synthetic": 3546
+    },
+    "rows_skipped_not_normal": {}
+  },
+  "calibration": {
+    "median_score": -0.4724623187211055,
+    "threshold_score": -0.5500896104640594,
+    "abnormal_score": -0.6277169022070133,
+    "rule": "health = 50 + 50*(score - threshold)/(median - threshold), clamped 0..100; 100 at the median normal score, 50 at the decision threshold, 0 at threshold - (median - threshold)"
+  },
+  "training_score_quantiles": {
+    "1": -0.5500896104640594,
+    "5": -0.5243843238091594,
+    "50": -0.4724623187211055,
+    "95": -0.43537908298936645,
+    "99": -0.42355423108171697
+  },
+  "training_health": {
+    "share_below_50": 0.01015228426395939,
+    "p5": 66.55686168984064,
+    "median": 99.9970740497442
+  },
+  "normal_stats": {
+    "temp_c__mean": {
+      "mean": 29.57758319232939,
+      "std": 0.7199071248846944,
+      "min": 28.309999999999995,
+      "max": 30.919999999999998
+    },
+    "temp_c__std": {
+      "mean": 0.18657581383466612,
+      "std": 0.04331427845919581,
+      "min": 0.06000000000000085,
+      "max": 0.3200000000000003
+    },
+    "temp_c__min": {
+      "mean": 29.271404399323185,
+      "std": 0.7321480203196816,
+      "min": 27.9,
+      "max": 30.6
+    },
+    "temp_c__max": {
+      "mean": 29.887337845459673,
+      "std": 0.7140088577698547,
+      "min": 28.6,
+      "max": 31.2
+    },
+    "temp_c__slope": {
+      "mean": 6.614367020458418e-05,
+      "std": 0.023606116112326807,
+      "min": -0.08303030303030305,
+      "max": 0.07272727272727272
+    },
+    "temp_c__last": {
+      "mean": 29.57794698251551,
+      "std": 0.7451621471215101,
+      "min": 27.9,
+      "max": 31.2
+    },
+    "humidity__mean": {
+      "mean": 60.6404850535815,
+      "std": 4.933904342431792,
+      "min": 51.15,
+      "max": 69.6
+    },
+    "humidity__std": {
+      "mean": 0.9236249803140645,
+      "std": 0.22959791743930594,
+      "min": 0.2758622844826739,
+      "max": 1.8649396773086242
+    },
+    "humidity__min": {
+      "mean": 59.110434292160186,
+      "std": 4.975591123755294,
+      "min": 49.0,
+      "max": 68.2
+    },
+    "humidity__max": {
+      "mean": 62.167484489565716,
+      "std": 4.975704111466413,
+      "min": 52.3,
+      "max": 70.7
+    },
+    "humidity__slope": {
+      "mean": -0.001884154574509902,
+      "std": 0.1133002470636503,
+      "min": -0.4727272727272724,
+      "max": 0.3751515151515151
+    },
+    "humidity__last": {
+      "mean": 60.63200789622109,
+      "std": 5.033614505200541,
+      "min": 49.0,
+      "max": 70.7
+    },
+    "sound_peak__mean": {
+      "mean": 5.055160744500846,
+      "std": 0.848612975091361,
+      "min": 2.9,
+      "max": 7.2
+    },
+    "sound_peak__std": {
+      "mean": 1.0855797691917473,
+      "std": 0.25048049622913243,
+      "min": 0.39999999999999997,
+      "max": 1.9595917942265426
+    },
+    "sound_peak__min": {
+      "mean": 3.431190073322053,
+      "std": 0.8325225121218482,
+      "min": 2.0,
+      "max": 6.0
+    },
+    "sound_peak__max": {
+      "mean": 6.817258883248731,
+      "std": 0.9501957165250386,
+      "min": 4.0,
+      "max": 8.0
+    },
+    "sound_peak__slope": {
+      "mean": -1.3673110119810434e-05,
+      "std": 0.13038661146317038,
+      "min": -0.47878787878787876,
+      "max": 0.41818181818181815
+    },
+    "sound_peak__last": {
+      "mean": 5.053581500282008,
+      "std": 1.3999657069108318,
+      "min": 2.0,
+      "max": 8.0
+    },
+    "vib_count__mean": {
+      "mean": 2.1412295544275244,
+      "std": 0.809909759260344,
+      "min": 0.2,
+      "max": 4.4
+    },
+    "vib_count__std": {
+      "mean": 1.0403527037286586,
+      "std": 0.2551801333619667,
+      "min": 0.3,
+      "max": 1.8547236990991407
+    },
+    "vib_count__min": {
+      "mean": 0.6393119007332205,
+      "std": 0.6804165641724773,
+      "min": 0.0,
+      "max": 3.0
+    },
+    "vib_count__max": {
+      "mean": 3.8595600676818953,
+      "std": 1.0647482899515552,
+      "min": 1.0,
+      "max": 6.0
+    },
+    "vib_count__slope": {
+      "mean": 0.000454630911483703,
+      "std": 0.1304712736942428,
+      "min": -0.4121212121212121,
+      "max": 0.4484848484848485
+    },
+    "vib_count__last": {
+      "mean": 2.143260011280316,
+      "std": 1.3444150224068074,
+      "min": 0.0,
+      "max": 6.0
+    }
+  },
+  "range_excess": {
+    "stds_per_50_health": 3.0,
+    "rule": "excess = max over features of (distance beyond training min/max) / training std; health -= 50 * excess / stds_per_50_health"
+  },
+  "provisional": true,
+  "provisional_reason": "trained on synthetic data; retrain on real normal recordings (Phase 8)"
+}

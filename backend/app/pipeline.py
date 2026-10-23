@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from .device_rules import DeviceStateMachine
@@ -35,6 +36,12 @@ class Pipeline:
         # exactly; for live rows it explains the device's state (reason, hold timer).
         self.device = DeviceStateMachine(state.registry, state.settings.hold_seconds)
         self.device_reported: str | None = None
+        # Link debounce: a source counts as connected while it is starting up (grace period)
+        # or while rows keep arriving; only grace seconds without data mean "disconnected".
+        self._started_at = time.monotonic()
+        self._last_row_at: float | None = None
+        self._reported_connected: bool | None = None
+        self._watchdog: asyncio.Task[None] | None = None
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -67,7 +74,11 @@ class Pipeline:
         self.state.history.clear()
         self.device.reset()
         self.device_reported = None
+        self._started_at = time.monotonic()
+        self._last_row_at = None
         self._task = asyncio.create_task(self._run(source), name=f"source-{source.kind}")
+        if self._watchdog is None or self._watchdog.done():
+            self._watchdog = asyncio.create_task(self._watch_link(), name="link-watchdog")
         log.info("Source switched to %s", source.kind)
         await self.notify_status()
 
@@ -81,6 +92,23 @@ class Pipeline:
                 pass
         if self.source is not None:
             await self.source.close()
+
+    async def shutdown(self) -> None:
+        await self.stop()
+        watchdog, self._watchdog = self._watchdog, None
+        if watchdog is not None:
+            watchdog.cancel()
+            try:
+                await watchdog
+            except asyncio.CancelledError:
+                pass
+
+    async def _watch_link(self) -> None:
+        """Push a status message when the debounced connected flag flips without any event."""
+        while True:
+            await asyncio.sleep(0.25)
+            if self.link()["connected"] != self._reported_connected:
+                await self.notify_status()
 
     async def _run(self, source: Source) -> None:
         try:
@@ -99,12 +127,40 @@ class Pipeline:
         row = process(row, st)
         self.device.update(row.values)
         self.device_reported = row.dev_state
+        self._last_row_at = time.monotonic()
         st.rows_received += 1
         st.history.append(row)
         st.recorder.write(row)
         await st.broadcaster.send({"type": "row", "mode": row.mode, "row": row.to_dict(), "device": self.device_status()})
 
     # ---- status ------------------------------------------------------------------------
+    def link(self) -> dict[str, Any]:
+        """Debounced connection state.
+
+        link: "starting" (new source, within the grace period), "ok" (rows arriving),
+        "no_data" (source open but silent for grace seconds), "down" (port/source error
+        for grace seconds), "finished" (replay ended).
+        """
+        grace = self.state.settings.link_grace_s
+        now = time.monotonic()
+        src = self.source
+        age = None if self._last_row_at is None else now - self._last_row_at
+        if src is None:
+            state = "down"
+        elif src.finished:
+            state = "finished"
+        elif age is not None and age < grace:
+            state = "ok"
+        elif now - self._started_at < grace:
+            state = "starting"
+        else:
+            state = "no_data" if src.connected else "down"
+        return {
+            "connected": state in ("ok", "starting"),
+            "link": state,
+            "data_age_s": None if age is None else round(age, 1),
+        }
+
     def status(self) -> dict[str, Any]:
         st = self.state
         src = self.source.status() if self.source else {}
@@ -115,7 +171,7 @@ class Pipeline:
             "file": src.get("file"),
             "loop": src.get("loop"),
             "serial_port": src.get("serial_port"),
-            "connected": src.get("connected", False),
+            **self.link(),
             "last_error": src.get("last_error"),
             "source_detail": src,
             "device": self.device_status(),
@@ -136,4 +192,6 @@ class Pipeline:
         return snap
 
     async def notify_status(self) -> None:
-        await self.state.broadcaster.send({"type": "status", "status": self.status()})
+        status = self.status()
+        self._reported_connected = status["connected"]
+        await self.state.broadcaster.send({"type": "status", "status": status})

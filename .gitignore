@@ -35,4 +35,9 @@ desktop.ini
 .idea/
 .vscode/
 
+# --- Generated data (regenerate with backend/scripts/generate_synthetic.py) ---
+data/synthetic/
+# Development evaluation reports on simulated data are never results; keep them local.
+docs/eval/*_SIMULATED.md
+
 # NOTE: data/recordings/ and models/ are deliberately NOT ignored.

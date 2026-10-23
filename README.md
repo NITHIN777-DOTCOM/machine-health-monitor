@@ -45,7 +45,9 @@ flowchart LR
 | `backend/scripts/` | Helper scripts (recording, training, simulation). |
 | `dashboard/` | React + TypeScript dashboard. |
 | `data/recordings/` | Recorded sensor data (CSV), committed to git. |
-| `models/` | Trained ML models, committed to git. |
+| `data/synthetic/` | Generated training data (not in git; recreate with `backend/scripts/generate_synthetic.py`). |
+| `models/` | Trained ML model, committed to git. **Currently PROVISIONAL: trained on synthetic data only** (see [`models/README.md`](models/README.md)). |
+| `docs/eval/` | Evaluation reports. Only reports on real recordings are results. |
 | `docs/DATA_CONTRACT.md` | **Serial format and stored-data format.** Read this first. |
 
 ## Key documents

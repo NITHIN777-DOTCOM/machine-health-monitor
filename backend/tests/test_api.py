@@ -13,7 +13,7 @@ from app.sources import serial_source
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.delenv("MHM_PORT", raising=False)
-    monkeypatch.setattr(main, "load_settings", lambda: Settings(recordings_dir=tmp_path))
+    monkeypatch.setattr(main, "load_settings", lambda: Settings(recordings_dir=tmp_path, link_grace_s=0.3))
     # No real hardware: startup and any switch to serial see no ports at all.
     monkeypatch.setattr(serial_source.list_ports, "comports", lambda: [])
     with TestClient(main.app) as c:
@@ -87,9 +87,31 @@ def test_record_label_and_replay_round_trip(client, tmp_path):
 
 def test_switch_to_serial_without_arduino(client):
     client.post("/api/source", json={"type": "serial"})
-    s = wait_for(lambda: (s := client.get("/api/status").json())["last_error"] and s)
+    s = client.get("/api/status").json()
+    assert s["connected"] is True and s["link"] == "starting"        # grace period, no flash
+    s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "down" and s)
     assert s["source"] == "serial" and s["connected"] is False
     assert "No Arduino found" in s["last_error"]
+
+
+def test_source_switch_never_reports_disconnected(client):
+    with client.websocket_connect("/ws/stream") as ws:
+        ws.receive_json()
+        for scenario in ("sudden_fault", "recovery", "normal"):
+            fast_sim(client, scenario)
+        statuses = [m["status"] for m in (ws.receive_json() for _ in range(60)) if m["type"] == "status"]
+    assert len(statuses) >= 3
+    assert all(s["connected"] for s in statuses), [(s["scenario"], s["link"]) for s in statuses]
+
+
+def test_finished_replay_reports_link_finished(client):
+    fast_sim(client)
+    f = client.post("/api/record/start").json()["file"]
+    wait_for(lambda: client.get("/api/status").json()["recording"]["rows"] >= 3)
+    client.post("/api/record/stop")
+    client.post("/api/source", json={"type": "replay", "file": f, "speed": 20})
+    s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "finished" and s)
+    assert s["connected"] is False and s["data_age_s"] is not None
 
 
 @pytest.mark.parametrize("body, code, message", [

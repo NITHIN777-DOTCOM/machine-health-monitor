@@ -5,20 +5,7 @@ import pytest
 
 from app.config import ROOT_DIR
 from app.device_rules import DeviceStateMachine, evaluate, triggers
-from app.registry import Registry
-
-
-def sensor(key, warn, critical, direction="above", hysteresis=None, tier="core", enabled=True, **kw):
-    return {"key": key, "display_name": key.upper(), "hardware": key.upper() + "-HW", "warn": warn,
-            "critical": critical, "direction": direction, "hysteresis": hysteresis, "tier": tier,
-            "enabled": enabled, "include_in_ml": True, **kw}
-
-
-def make_reg(*sensors) -> Registry:
-    return Registry.from_dict({
-        "csv_columns": ["ms", *[s["key"] for s in sensors], "dev_state"],
-        "sensors": list(sensors),
-    })
+from helpers import make_reg, sensor
 
 
 @pytest.fixture

@@ -135,6 +135,12 @@ auto-detection.
 | GET  | `/api/recordings` | Recording files with size, row count and duration. |
 | WS   | `/ws/stream` | Messages: `{"type":"row","mode":...,"row":{...},"device":{...}}` and `{"type":"status","status":{...}}`. |
 
+`connected` in `/api/status` is debounced: it stays `true` while a new source starts up
+and while rows arrive, and only turns `false` after `link_grace_s` (3) seconds without
+data or with a port error, so the dashboard doesn't flash "disconnected" on every source
+switch. `link` gives the detail: `starting`, `ok`, `no_data`, `down` or `finished`, plus
+`data_age_s`.
+
 `device` (on every row and in `/api/status`) is the state machine snapshot: `state`,
 `reason` / `reasons` (which sensor and limit), `clearing`, `hold_remaining_s`,
 `last_change`, `device_reported` (the row's own `dev_state`) and `agrees`. Rules:
@@ -160,6 +166,36 @@ Example (`recovery` scenario at 5x):
     58  28.7    56     6    3  WARNING   WARNING      1  normal  recovering, was: ...
     59  28.8  59.4     6    3  NORMAL    NORMAL       -  normal
 ```
+
+## ML engine (offline; wired into the live pipeline in Phase 3.2)
+
+| File | Role |
+|---|---|
+| `app/ml/features.py` | `FeatureWindow`: per ML sensor mean, std, min, max, slope (per second), last over the last `ml_window_s` (10) seconds of the **device clock**. Returns `None` ("warming up") until the window is full or if a sensor is missing in more than 30% of it. Used by training, evaluation **and** live scoring. |
+| `app/ml/training.py` | IsolationForest on `label=normal` windows only, health calibration, `model_meta.json`. |
+| `app/ml/scorer.py` | `Scorer.score(features)` returns `ml_status` (OK / ANOMALY / WARMING_UP / NO_MODEL / NEEDS_RETRAIN), `health` 0–100, top-2 `causes` ("Vibration high", z), `provisional`. A model trained on other sensors returns NEEDS_RETRAIN and never crashes. |
+| `app/ml/forecast.py` | Linear trend over the last 60 s per sensor with limits: seconds to WARNING / CRITICAL (direction aware; R² ≥ 0.6; "> 30 min" cap) or "stable". Needs no model. |
+| `app/ml/evaluation.py` | ML vs rules vs forecast metrics. Real rows only unless `--dev-synthetic`. |
+
+Data rules, enforced in code:
+- Training uses only `label=normal` rows. Synthetic data may be used for training only;
+  the model is then marked **provisional**.
+- Evaluation numbers are only valid on **real** rows with induced faults. `evaluate.py`
+  refuses synthetic or fault-free input; `--dev-synthetic` output is stamped
+  **SIMULATED DATA - NOT A RESULT** on every line.
+- ML sensors come from the registry (`enabled` AND `include_in_ml`); current and bus
+  voltage are excluded.
+
+```
+python scripts/generate_synthetic.py                         # 60 min normal + dev fault set -> data/synthetic/
+python scripts/generate_synthetic.py --from-real ../data/recordings/session_*.csv   # baselines from real data
+python scripts/train.py "../data/synthetic/normal_*.csv"     # -> models/model.joblib + model_meta.json
+python scripts/evaluate.py ../data/recordings/session_*.csv  # real recordings with label=fault periods
+python scripts/evaluate.py --dev-synthetic "../data/synthetic/devfault_*.csv"   # development check only
+```
+
+Settings (`config/settings.json`): `ml_window_s`, `ml_max_missing_frac`,
+`forecast_window_s`, `forecast_min_r2`, `forecast_cap_s`.
 
 ## Tests
 
