@@ -5,6 +5,7 @@ For every enabled sensor with "forecast": true in the registry and a warn and/or
 critical limit (spiky event signals like sound and vibration have forecast: false, a
 linear trend through them misleads):
   - fit value = a + b*t over the last `window_s` seconds of the device clock (ms)
+  - if the newest row has no value       -> "no_data" (sensor fault: no trend from old values)
   - if there are too few points          -> "insufficient_data"
   - if the fitted value is already at/past a limit -> that limit is "reached"
   - if the trend points towards the limit (b > 0 for direction "above", b < 0 for
@@ -59,6 +60,11 @@ def forecast_sensor(sensor: Sensor, rows: Sequence[Any], *, window_s: float = 60
     if not timed:
         return out
     now_ms = timed[-1].ms
+    if timed[-1].values.get(sensor.key) is None:
+        # The newest reading is missing (e.g. the DHT11 failed): say so instead of
+        # forecasting from old readings.
+        out.update(status="no_data", text=f"{sensor.display_name}: no data")
+        return out
     pts = [((r.ms - now_ms) / 1000.0, r.values.get(sensor.key)) for r in timed
            if r.ms > now_ms - window_s * 1000 and r.values.get(sensor.key) is not None]
     if len(pts) < max(5, MIN_COVERAGE * window_s):

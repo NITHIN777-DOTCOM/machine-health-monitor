@@ -66,7 +66,7 @@
     "median_score": -0.4724623187211055,
     "threshold_score": -0.5500896104640594,
     "abnormal_score": -0.6277169022070133,
-    "rule": "health = 50 + 50*(score - threshold)/(median - threshold), clamped 0..100; 100 at the median normal score, 50 at the decision threshold, 0 at threshold - (median - threshold)"
+    "rule": "r = (score - threshold)/(median - threshold); IF part = 50 + 50*r (max 100) if r >= 0, else 50/(1 - r); health = min(IF part, range part)"
   },
   "training_score_quantiles": {
     "1": -0.5500896104640594,
@@ -227,8 +227,9 @@
     }
   },
   "range_excess": {
-    "stds_per_50_health": 3.0,
-    "rule": "excess = max over features of (distance beyond training min/max) / training std; health -= 50 * excess / stds_per_50_health"
+    "k": 16.7,
+    "b": 0.28,
+    "rule": "excess = max over features of (distance beyond training min/max) / training std; range part = 100 - k*ln(1 + excess/b), clamped 0..100"
   },
   "provisional": true,
   "provisional_reason": "trained on synthetic data; retrain on real normal recordings (Phase 8)"

@@ -65,8 +65,11 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
    keeps the overall status at WARNING, WARNING -> NORMAL then reads "rules clear in N s;
    ML anomaly still active" instead of promising "back to normal".
 3. **Device rules** (state, reason, quiet hold countdown, "mirror agrees" / "mismatch"),
-   **ML** (status, health 0-100 with a bar, top 2 causes with z-scores, "provisional model"
-   tag), **Forecast** (for sensors with `forecast: true`: trend and "CRITICAL in ~3 min").
+   **ML** (status, health 0-100 with a bar and the anomaly level from `ml_thresholds`, up to
+   2 causes in plain words such as "Vibration: far above normal" with z only in the tooltip,
+   "provisional model" note), **Forecast** (for sensors with `forecast: true`: "critical in
+   ~3 min", "no data" when the sensor's newest value is missing, and "confidence: low /
+   medium / high" from the fit R², which is in the tooltip).
 4. **Sensor cards**: one per enabled sensor, each with its own level against its limits.
    Disabled sensors are listed as "Not connected"; an enabled sensor with an empty field
    shows "No reading - sensor fault".
@@ -100,6 +103,7 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 | `src/lib/cards.ts` | Sensor cards from the registry |
 | `src/lib/buffer.ts` | 5-minute trend buffer |
 | `src/components/` | One file per part of the page |
+| `src/lib/format.ts` (Phase 5) | Also: cause words by |z| band, the z tooltip, forecast confidence (R² bands), health bands from `status.ml_thresholds` |
 | `src/lib/grid.ts` | Chart grid: columns that fit, last chart stretched so no row has a gap |
 | `src/styles.css` | All styles; colour, spacing and type tokens are CSS variables at the top |
 | `scripts/contrast.mjs` | WCAG contrast check of the colour tokens (both themes) |

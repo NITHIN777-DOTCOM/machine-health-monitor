@@ -1,4 +1,4 @@
-import { forecastText, forecastTone, trendIcon } from "../lib/format";
+import { forecastDetail, forecastText, forecastTone, trendIcon } from "../lib/format";
 import type { Analysis, Registry } from "../types";
 import { Icon } from "./Icon";
 
@@ -20,14 +20,13 @@ export function ForecastPanel({ analysis, registry }: { analysis: Analysis | nul
             const tone = forecastTone(f);
             return (
               <li key={key} className="forecast-item" data-status={f.status}>
-                <Icon name={trendIcon(f.trend)} size={16} className={`text-${tone}`} />
+                <Icon name={f.status === "no_data" ? "off" : trendIcon(f.trend)} size={16} className={`text-${tone}`} />
                 <div>
                   <div className={`forecast-text ${tone === "warning" || tone === "critical" ? `text-${tone}` : ""}`}>
                     {forecastText(name(key), f)}
                   </div>
-                  <div className="xs muted num">
-                    trend: {f.trend ?? "not enough data yet"}
-                    {f.r2 != null && ` · fit R² ${f.r2.toFixed(2)}`}
+                  <div className="xs muted" title={f.r2 != null ? `Line fit R² = ${f.r2.toFixed(2)} (low < 0.6 ≤ medium < 0.85 ≤ high)` : undefined}>
+                    {forecastDetail(f)}
                   </div>
                 </div>
               </li>

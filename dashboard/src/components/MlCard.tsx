@@ -1,12 +1,21 @@
-import { causeText, healthLabel, healthTone, mlView } from "../lib/format";
-import type { MlBlock } from "../types";
+import { causeText, causeTooltip, healthLabel, healthTone, mlView, type HealthLevels } from "../lib/format";
+import type { MlBlock, Registry } from "../types";
 import { Icon } from "./Icon";
 
 /** The ML opinion: advisory only (it can raise the overall status to WARNING, never CRITICAL). */
-export function MlCard({ ml }: { ml: MlBlock | null }) {
+interface Props {
+  ml: MlBlock | null;
+  registry: Registry | null;
+  levels: HealthLevels;
+}
+
+export function MlCard({ ml, registry, levels }: Props) {
   const view = mlView(ml);
   const health = ml?.health ?? null;
-  const tone = healthTone(health);
+  const tone = healthTone(health, levels);
+  const name = (key: string) => registry?.sensors.find((s) => s.key === key)?.display_name;
+  // Only features that really differ (|z| >= 2); "Humidity: normal" is not a cause.
+  const causes = (ml?.causes ?? []).filter((c) => Math.abs(c.z) >= 2).slice(0, 2);
   // Calm when healthy: the bar and number only take a status colour below the clear level.
   const abnormal = tone === "warning" || tone === "ml";
   return (
@@ -32,7 +41,7 @@ export function MlCard({ ml }: { ml: MlBlock | null }) {
             {health == null ? "-" : Math.round(health)}
             <span className="health-max">/100</span>
           </div>
-          <div className="xs muted">health · {healthLabel(health)}</div>
+          <div className="xs muted">{health == null ? "no score" : `health · ${healthLabel(health, levels)}`}</div>
         </div>
       </div>
       <div
@@ -44,18 +53,18 @@ export function MlCard({ ml }: { ml: MlBlock | null }) {
         aria-label="ML health score"
       >
         <div className={`health-fill ${abnormal ? `fill-${tone}` : ""}`} style={{ width: `${health ?? 0}%` }} />
-        <div className="health-mark" style={{ left: "50%" }} title="50 = anomaly threshold" />
+        <div className="health-mark" style={{ left: `${levels.anomaly_health}%` }} title={`${levels.anomaly_health} = anomaly threshold`} />
       </div>
       <div className="causes small">
         <span className="muted">Biggest differences from normal</span>
-        {ml && ml.causes.length ? (
+        {causes.length ? (
           <ul>
-            {ml.causes.slice(0, 2).map((c) => (
-              <li key={c.feature}>{causeText(c)}</li>
+            {causes.map((c) => (
+              <li key={c.feature} title={causeTooltip(c)} data-band={c.band}>{causeText(c, name(c.sensor))}</li>
             ))}
           </ul>
         ) : (
-          <p className="muted">None (no score yet)</p>
+          <p className="muted">{health == null ? "None (no score yet)" : "Nothing unusual"}</p>
         )}
       </div>
     </section>

@@ -73,6 +73,9 @@ export interface MlCause {
   z: number;
   /** "high", "low", "unstable", "rising", ... */
   direction: string;
+  /** |z| band: normal (< 2), slight (2-3), clear (3-6), far (>= 6). */
+  band: "normal" | "slight" | "clear" | "far";
+  /** Plain words, e.g. "Vibration: far above normal". */
   text: string;
 }
 
@@ -90,7 +93,8 @@ export interface MlBlock {
   range_excess?: number | null;
 }
 
-export type ForecastStatus = "insufficient_data" | "stable" | "approaching" | "reached";
+/** no_data: the newest row has no value for the sensor (e.g. the DHT11 failed). */
+export type ForecastStatus = "insufficient_data" | "no_data" | "stable" | "approaching" | "reached";
 
 export interface ForecastEntry {
   trend: "rising" | "falling" | "stable" | null;
@@ -119,7 +123,10 @@ export interface AnalysisDevice {
 export interface Analysis {
   overall: DevState;
   alert_source: AlertSource;
+  /** Short human sentence, e.g. "Sound level and vibration above critical limits". */
   headline: string;
+  /** Smaller second line with the exact values, or null. */
+  headline_detail: string | null;
   device: AnalysisDevice;
   ml: MlBlock;
   forecast: Record<string, ForecastEntry>;
@@ -201,6 +208,24 @@ export interface Status {
   startup_reason: string;
   registry_warnings: string[];
   scenarios: string[];
+  ml_thresholds: MlThresholds;
+  serial: SerialInfo;
+}
+
+/** ML smoothing levels (settings.json): ANOMALY after health < anomaly_health for
+ *  anomaly_rows rows; clears after health > clear_health for clear_rows rows. */
+export interface MlThresholds {
+  anomaly_health: number;
+  anomaly_rows: number;
+  clear_health: number;
+  clear_rows: number;
+}
+
+/** Whether switching to the Arduino can work (false with MHM_SOURCE=simulator or no Uno). */
+export interface SerialInfo {
+  available: boolean;
+  port: string | null;
+  note: string | null;
 }
 
 // ---- endpoints ---------------------------------------------------------------------------

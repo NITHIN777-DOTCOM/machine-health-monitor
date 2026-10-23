@@ -22,7 +22,7 @@ export function StatusBanner({ analysis, holdSeconds }: Props) {
     );
   }
   const view = stateView(analysis.overall);
-  const text = bannerText(analysis.headline, analysis.device, analysis.alert_source, holdSeconds);
+  const text = bannerText(analysis.headline, analysis.headline_detail, analysis.device, analysis.alert_source, holdSeconds);
   const source = alertSourceLabel(analysis.alert_source);
   // A warning raised by ML alone gets the ML colour, so it reads differently from a rule limit.
   const tone: Tone = analysis.overall === "WARNING" && analysis.alert_source === "ml" ? "ml" : view.tone;

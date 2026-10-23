@@ -23,7 +23,7 @@ from typing import Any
 from .config import Settings
 from .device_rules import worst
 from .ml.forecast import forecast, forecast_sensors, human_eta
-from .ml.scorer import ANOMALY, OK, WARMING_UP, Scorer
+from .ml.scorer import ANOMALY, OK, WARMING_UP, Scorer, short_name
 from .models import SensorRow
 from .registry import Registry
 
@@ -159,6 +159,7 @@ class Analyzer:
         overall = worst(rules, "WARNING" if ml_flag else "NORMAL")   # ML never makes it CRITICAL
         rules_flag = rules != "NORMAL"
         source = "both" if rules_flag and ml_flag else "rules" if rules_flag else "ml" if ml_flag else "none"
+        headline, detail = self._headline(rules, device, ml, fc)
         forecast_out = {k: {"trend": f["trend"], "status": f["status"], "seconds_to_warn": f["to_warn_s"],
                             "seconds_to_critical": f["to_critical_s"], "to_warn": f["to_warn"],
                             "to_critical": f["to_critical"], "text": f["text"], "r2": f["r2"]}
@@ -166,7 +167,8 @@ class Analyzer:
         return {
             "overall": overall,
             "alert_source": source,
-            "headline": self._headline(rules, device, ml, fc),
+            "headline": headline,
+            "headline_detail": detail,
             "device": {"state": device["state"], "reported": row.dev_state, "reason": device["reason"],
                        "hold_remaining_s": device["hold_remaining_s"], "agrees": device.get("agrees")},
             "ml": ml,
@@ -183,38 +185,89 @@ class Analyzer:
                     best = (secs, level, key)
         return best
 
+    def _short(self, key: str) -> str:
+        return short_name(self._name(key))
+
+    def _rules_text(self, rules: str, device: dict[str, Any]) -> tuple[str, list[str]]:
+        """("Sound level and vibration above critical limits", exact values) from the
+        device mirror's triggers at the current level."""
+        trigs = [t for t in device.get("reasons", []) if t["level"] == rules] or device.get("reasons", [])
+        parts, values = [], []
+        faults = list(dict.fromkeys(self.registry.get(t["sensor"]).hardware if self.registry.get(t["sensor"])
+                                    else t["sensor"] for t in trigs if t["kind"] == "fault"))
+        if faults:
+            parts.append(f"Sensor fault: {join_names(faults)}")
+            values += [f"{hw}: no reading" for hw in faults]
+        limits = [t for t in trigs if t["kind"] == "limit"]
+        if limits:
+            level = "critical" if rules == "CRITICAL" else "warning"
+            over = [t for t in limits if not t["in_band"]] or limits
+            names = [self._short(t["sensor"]) for t in over]
+            names = [names[0]] + [n.lower() for n in names[1:]]
+            where = "near" if all(t["in_band"] for t in over) else (
+                "above" if over[0]["direction"] == "above" else "below")
+            plural = "limits" if len(over) > 1 else "limit"
+            parts.append(f"{join_names(names)} {where} {level} {plural}")
+            for t in limits:
+                lim = "crit" if t["level"] == "CRITICAL" else "warn"
+                held = ", holding near" if t["in_band"] else ","
+                values.append(f"{self._short(t['sensor'])} {t['value']:g}{held} {lim} limit {t['limit']:g}")
+        if not parts:                                   # device state without a mirror reason
+            parts.append(f"{rules.capitalize()} reported by the device")
+        text = "; ".join(parts)
+        return text[0].upper() + text[1:], values
+
+    def _ml_pattern(self, ml: dict[str, Any]) -> str:
+        strong = [c for c in ml["causes"] if abs(c["z"]) >= 3] or ml["causes"][:1]
+        if not strong:
+            return "Unusual pattern"
+        return f"Unusual {join_names([self._short(c['sensor']).lower() for c in strong])} pattern"
+
     def _headline(self, rules: str, device: dict[str, Any], ml: dict[str, Any],
-                  fc: dict[str, dict[str, Any]]) -> str:
+                  fc: dict[str, dict[str, Any]]) -> tuple[str, str | None]:
+        """A short human headline and a smaller second line with the exact values."""
         cap = self.settings.forecast_cap_s
         health = ml["health"]
-        crit = [(f["to_critical_s"], k) for k, f in fc.items() if f["to_critical_s"]]
-        crit_suffix = ""
-        if crit:
-            secs, key = min(crit)
-            crit_suffix = f"; {self._name(key)} CRITICAL in {human_eta(secs, cap)}"
-        if rules != "NORMAL":
-            text = f"{device['reason'] or 'Rule limit'} - {rules}"
-            if ml["status"] == ANOMALY:
-                text += f"; ML anomaly (health {health:.0f})"
-            return text + (crit_suffix if rules == "WARNING" else "")
-        if ml["status"] == ANOMALY and ml.get("clear_remaining_s"):
-            return f"Back to normal - ML anomaly clearing in {ml['clear_remaining_s']} s (health {health:.0f})"
-        if ml["status"] == ANOMALY:
-            cause = ml["causes"][0]["text"] if ml["causes"] else "Unusual pattern"
-            return f"{cause} - ML anomaly (health {health:.0f})" + crit_suffix
         soon = self._soonest(fc)
+        soon_text = None
         if soon:
             secs, level, key = soon
-            return f"{self._name(key)} {fc[key]['trend']} - {level} in {human_eta(secs, cap)}"
+            soon_text = f"{self._short(key)} may reach {level.lower()} in {human_eta(secs, cap)}"
+        crit = [(f["to_critical_s"], k) for k, f in fc.items() if f["to_critical_s"]]
+        crit_text = None
+        if crit:
+            secs, key = min(crit)
+            crit_text = f"{self._short(key)} may reach critical in {human_eta(secs, cap)}"
+        if rules != "NORMAL":
+            text, values = self._rules_text(rules, device)
+            if ml["status"] == ANOMALY:
+                values.append(f"ML anomaly (health {health:.0f})")
+            if rules == "WARNING" and crit_text:
+                values.append(crit_text)
+            return text, " · ".join(values) or None
+        if ml["status"] == ANOMALY and ml.get("clear_remaining_s"):
+            return f"Back to normal; ML anomaly clearing in {ml['clear_remaining_s']} s", f"Health {health:.0f}"
+        if ml["status"] == ANOMALY:
+            words = " · ".join(c["text"] for c in ml["causes"] if abs(c["z"]) >= 2) or None
+            if crit_text:
+                words = f"{words} · {crit_text}" if words else crit_text
+            return f"{self._ml_pattern(ml)} (health {health:.0f})", words
+        if soon_text:
+            f = fc[soon[2]]
+            parts = []
+            for lvl, eta in (("warning", f["to_warn"]), ("critical", f["to_critical"])):
+                if eta:
+                    parts.append(f"{lvl} {eta}" if eta == "reached" else f"{lvl} in {eta}")
+            return soon_text, f"{self._short(soon[2])} {f['trend']}: " + ", ".join(parts)
         if ml["status"] == WARMING_UP:
-            return f"Normal - ML warming up ({ml['warmup_remaining_s']:.0f} s)"
+            return "All systems normal", f"ML warming up: {ml['warmup_remaining_s']:.0f} s left"
         if ml.get("settling_remaining_s"):
-            return f"Normal - ML settling after warm start ({ml['settling_remaining_s']} s)"
+            return "All systems normal", f"ML settling after warm start: {ml['settling_remaining_s']} s left"
         if ml["status"] == ML_UNAVAILABLE:
-            return f"Normal - ML unavailable ({ml['message']})"
+            return "All systems normal (rules only)", f"ML unavailable: {ml['message']}"
         if ml["status"] not in (OK, ANOMALY):
-            return f"Normal - rules only ({ml['message']})"
-        return "All normal" + (f" (health {health:.0f})" if health is not None else "")
+            return "All systems normal (rules only)", ml["message"]
+        return "All systems normal", (f"Health {health:.0f}" if health is not None else None)
 
     # ---- reporting ----------------------------------------------------------------------
     def timing(self) -> dict[str, Any]:
@@ -240,3 +293,9 @@ def compact(analysis: dict[str, Any] | None) -> dict[str, Any] | None:
         "forecast": {k: {"seconds_to_warn": f["seconds_to_warn"], "seconds_to_critical": f["seconds_to_critical"]}
                      for k, f in analysis["forecast"].items()},
     }
+
+
+def join_names(names: list[str]) -> str:
+    """["A"] -> "A"; ["A", "B"] -> "A and B"; ["A", "B", "C"] -> "A, B and C"."""
+    names = list(dict.fromkeys(names))
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]

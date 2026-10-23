@@ -109,3 +109,19 @@ def test_window_limits_history():
         r.values["t"] = 28.0 + 0.02 * (r.ms / 1000 - 140)
     f = forecast(rows, ABOVE, window_s=60)["t"]          # only the ramp is in the last 60 s
     assert f["slope_per_s"] == pytest.approx(0.02) and f["status"] == "approaching"
+
+
+def test_missing_newest_value_says_no_data():
+    # A sensor that fails after a clear rising trend: no forecast from the old readings.
+    rows = series("t", 28.0, 0.05)
+    rows[-1].values["t"] = None
+    f = forecast(rows, ABOVE)["t"]
+    assert f["status"] == "no_data" and f["text"] == "T: no data"
+    assert f["trend"] is None and f["to_warn_s"] is None and f["to_critical_s"] is None
+    assert not predicts_critical({"t": f})
+
+
+def test_forecast_comes_back_when_values_return():
+    rows = series("t", 28.0, 0.05)
+    rows[-2].values["t"] = None
+    assert forecast(rows, ABOVE)["t"]["status"] == "approaching"

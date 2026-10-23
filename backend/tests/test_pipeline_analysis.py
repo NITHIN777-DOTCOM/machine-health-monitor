@@ -23,7 +23,7 @@ FC_KEYS = {"trend", "status", "seconds_to_warn", "seconds_to_critical", "to_warn
 
 def check_block(a, registry):
     """Every analysis block has the same well-formed shape, whatever the ML status."""
-    assert set(a) == {"overall", "alert_source", "headline", "device", "ml", "forecast", "warm_start"}
+    assert set(a) == {"overall", "alert_source", "headline", "headline_detail", "device", "ml", "forecast", "warm_start"}
     assert a["overall"] in ("NORMAL", "WARNING", "CRITICAL")
     assert a["alert_source"] in ("rules", "ml", "both", "none")
     assert isinstance(a["headline"], str) and a["headline"]
@@ -76,7 +76,7 @@ def test_warming_up_then_ok(reg, scorer):
         check_block(a, reg)
     assert [a["ml"]["warmup_remaining_s"] for a in out[:9]] == [9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0]
     assert all(a["ml"]["status"] == WARMING_UP for a in out[:9])
-    assert out[0]["headline"] == "Normal - ML warming up (9 s)"
+    assert (out[0]["headline"], out[0]["headline_detail"]) == ("All systems normal", "ML warming up: 9 s left")
     assert all(a["ml"]["status"] == OK for a in out[9:])
     assert out[-1]["overall"] == "NORMAL" and out[-1]["alert_source"] == "none"
 
@@ -91,7 +91,10 @@ def test_ml_unavailable_on_sensor_fault(reg, scorer):
     assert all(a["ml"]["status"] == ML_UNAVAILABLE for a in late)
     assert "Temperature" in late[-1]["ml"]["message"] and "Humidity" in late[-1]["ml"]["message"]
     assert late[-1]["overall"] == "WARNING" and late[-1]["alert_source"] == "rules"
-    assert late[-1]["headline"].startswith("SENSOR FAULT: DHT11 - WARNING")
+    assert late[-1]["headline"] == "Sensor fault: DHT11" and late[-1]["headline_detail"] == "DHT11: no reading"
+    # The forecast says "no data" from the first missing row, not "stable" from old readings.
+    assert out[start]["forecast"]["temp_c"]["status"] == "no_data"
+    assert all(a["forecast"][k]["status"] == "no_data" for a in late for k in ("temp_c", "humidity"))
 
 
 def test_no_model(reg):
@@ -99,7 +102,7 @@ def test_no_model(reg):
     for a in out:
         check_block(a, reg)
     assert out[-1]["ml"]["status"] == NO_MODEL and out[-1]["ml"]["health"] is None
-    assert out[-1]["headline"].startswith("Normal - rules only")
+    assert out[-1]["headline"] == "All systems normal (rules only)"
 
 
 def test_needs_retrain_keeps_rules_working(make_registry, trained):
@@ -125,7 +128,8 @@ def test_ml_anomaly_alone_is_only_warning(reg, scorer):
     assert a["ml"]["status"] == ANOMALY and a["ml"]["health"] == 0
     assert a["overall"] == "WARNING"            # never CRITICAL from ML, even at health 0
     assert a["alert_source"] == "ml"
-    assert a["headline"] == "Vibration high - ML anomaly (health 0)"
+    assert a["headline"] == "Unusual vibration pattern (health 0)"
+    assert a["headline_detail"].startswith("Vibration: far above normal")
     assert a["ml"]["causes"][0]["sensor"] == "vib_count" and a["ml"]["causes"][0]["direction"] == "high"
 
 
@@ -133,7 +137,8 @@ def test_rules_and_ml_together(reg, scorer):
     rows = sim_rows(reg, "normal", 20, 4) + vib_rows(reg, 15, 90, start_ms=20_000, dev_state="CRITICAL")
     a = Rig(reg, scorer).feed(rows)[-1]
     assert a["overall"] == "CRITICAL" and a["alert_source"] == "both"
-    assert "CRITICAL" in a["headline"] and "ML anomaly" in a["headline"]
+    assert a["headline"] == "Vibration above critical limit"
+    assert "crit limit 60" in a["headline_detail"] and "ML anomaly (health" in a["headline_detail"]
 
 
 def test_overall_never_critical_from_ml_in_any_scenario(reg, scorer):
@@ -152,7 +157,8 @@ def test_forecast_headline(reg, scorer):
     a = Rig(reg, scorer).feed(rows)[-1]
     assert a["forecast"]["temp_c"]["trend"] == "rising"
     assert a["forecast"]["temp_c"]["seconds_to_warn"] > 0
-    assert a["headline"].startswith("Temperature rising - WARNING in ")
+    assert a["headline"].startswith("Temperature may reach warning in ")
+    assert a["headline_detail"].startswith("Temperature rising: warning in ")
 
 
 # ---- smoothing ---------------------------------------------------------------------------
@@ -203,9 +209,10 @@ def test_clearing_anomaly_has_honest_headline():
         {"key": "a", "enabled": True, "include_in_ml": True, "tier": "core"}]})
     rig = Rig(reg, FakeScorer([30, 30, 30, 90, 90, 90, 90, 90]))
     out = rig.feed(rows_from([{"a": 1.0}] * 9))[1:]
-    assert out[2]["headline"].endswith("ML anomaly (health 30)")
+    assert out[2]["headline"] == "Unusual pattern (health 30)"
     assert [a["ml"]["clear_remaining_s"] for a in out[3:]] == [4, 3, 2, 1, None]
-    assert out[3]["headline"] == "Back to normal - ML anomaly clearing in 4 s (health 90)"
+    assert out[3]["headline"] == "Back to normal; ML anomaly clearing in 4 s"
+    assert out[3]["headline_detail"] == "Health 90"
     assert out[-1]["ml"]["status"] == OK and out[-1]["overall"] == "NORMAL"
 
 
@@ -231,7 +238,7 @@ def test_warm_start_removes_warming_up(reg, scorer):
     assert [a["ml"]["settling_remaining_s"] for a in out[:11]] == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, None]
     assert all(a["ml"]["health"] is None for a in out[:10])
     assert all(a["ml"]["health"] is not None for a in out[10:])
-    assert out[0]["headline"] == "Normal - ML settling after warm start (10 s)"
+    assert out[0]["headline_detail"] == "ML settling after warm start: 10 s left"
     assert out[10]["ml"]["message"] is None                     # window is all live data now
     assert out[0]["forecast"]["temp_c"]["status"] != "insufficient_data"
     assert out[0]["warm_start"] == "warm-started from warm.csv"

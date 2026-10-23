@@ -59,3 +59,96 @@ marks 3:1); all pass. Adjustments to the given palette:
 - Vitest: 38 passed (34 before + 4 new `grid.test.ts`). Format tests updated for the
   sentence-case state labels (spec change, not a code bug).
 - Backend pytest: 287 passed (unchanged in this part).
+
+## Part B: health curve, plain-language causes, forecast fixes
+
+### B1 Health score degrades gradually (backend `app/ml/scorer.py`, `training.py`)
+Old: `health = 50 + 50·r − 50·excess/3`, clamped (r = calibrated IF score). Two problems:
+the IF part went to 0 just one "normal spread" below the threshold, and the range term cost
+50 points per 3 std, so any vibration ≥ 8 /s scored 0.
+
+New: `health = min(IF part, range part)`:
+- IF part: unchanged above the threshold (100 at the median normal window, 50 at the
+  threshold); below it a soft decay `50 / (1 − r)` (25 at one spread below, 12.5 at three).
+- Range part: `100 − 16.7·ln(1 + excess / 0.28)`, clamped 0..100.
+
+Old vs new score for example windows (other sensors normal, provisional model):
+
+| Window | excess (std) | old | new |
+|---|---|---|---|
+| normal | 0 | 100 | 100 |
+| temperature 31.5 °C | 1.4 | 71.5 | 70.2 |
+| temperature 32.5 °C | 2.6 | 51.3 | 61.1 |
+| temperature 35 °C | 6.0 | 0 | 48.0 |
+| humidity 85 % | 3.4 | 31.3 | 57.1 |
+| vibration 8 /s | 6.4 | 0 | 43.8 |
+| **vibration 13 /s** (training range 0–6) | 13.8 | **0** | **34.6** |
+| vibration 20 /s | 24.1 | 0 | 25.4 |
+| vibration 30 /s | 38.8 | 0 | 17.5 |
+| sound 25 | 22.1 | 0 | 26.9 |
+| vibration 64 /s | 88.7 | 0 | 3.8 |
+| vibration 120 /s / sound 140 | 160+ | 0 | 0 |
+
+- The model was **not retrained**: the IsolationForest and its calibration (median /
+  threshold) are unchanged, only the post-processing changed. `models/model_meta.json` got
+  the new `calibration.rule` text and `range_excess: {k: 16.7, b: 0.28, rule}` (replacing
+  `stds_per_50_health`). `training.py` writes the same block for future models. The model
+  stays `provisional: true`.
+- Side effect (accepted): ML now flags a slow temperature rise a little later (health
+  crosses 50 at about 35 °C instead of about 32.6 °C). The rules still warn at 32 °C.
+- Tests: `test_health_calibration_anchor_points` (spec change: 25 instead of 0 one spread
+  below the threshold), `test_range_excess_lowers_health_gradually` (replaces the old
+  linear test), new `test_health_is_the_worse_of_both_parts`, `test_vibration_13_is_a_mid_score`.
+
+### B2 Causes in plain words
+- Backend: each cause now has `band` and plain `text` ("Vibration: far above normal").
+  Bands of |z|: < 2 normal, 2–3 slight, 3–6 clear, ≥ 6 far; words per statistic
+  (level: slightly high / above normal / far above normal; std: slightly unstable /
+  unstable / very unstable; slope: rising slightly / rising / rising fast; and the
+  low/falling counterparts). Documented in DATA_CONTRACT §9.
+- Dashboard: `causeWords()` / `causeText()` (same table) and `causeTooltip()`; z appears
+  only in the tooltip, and |z| ≥ 10 is shown as "more than 10 standard deviations", so a
+  capped 99 is never displayed. Causes with |z| < 2 are not listed ("Nothing unusual").
+
+### B3 Short human headlines
+`analysis.headline` is now short and `analysis.headline_detail` (new field) holds the exact
+values on a smaller second line. Examples (all seen live or in tests):
+"Sound level above critical limit" / "Sound level 185, crit limit 120 · ML anomaly (health 0)";
+"Sensor fault: DHT11" / "DHT11: no reading"; "Unusual vibration pattern (health 0)" /
+"Vibration: far above normal"; "Temperature may reach warning in ~2 min";
+"All systems normal" / "Health 98". Headline tests in `test_pipeline_analysis.py` were
+updated to the new wording (spec change).
+
+### B4 Forecast confidence
+"fit R² 0.63" is replaced by "rising · confidence: medium". Bands: R² < 0.6 low (below the
+backend's `forecast_min_r2`, the trend is not trusted), 0.6–0.85 medium, ≥ 0.85 high. R² is in
+the tooltip. A forecast with no trusted trend says "no clear trend".
+
+### B5 Forecast "No data"
+`forecast_sensor()` returns `status: "no_data"` (text "Temperature: no data") as soon as the
+newest row has no value for the sensor, instead of "stable" from old readings. Tests:
+`test_missing_newest_value_says_no_data`, `test_forecast_comes_back_when_values_return`, and
+a check in `test_ml_unavailable_on_sensor_fault` that the first missing row already says
+no_data.
+
+### B6 ML thresholds from the API
+`GET /api/status` and `GET /api/model` include `ml_thresholds` (`anomaly_health` 50,
+`anomaly_rows` 3, `clear_health` 60, `clear_rows` 5, from settings.json). The dashboard uses
+them for the health bands, the threshold mark on the health bar and the chart lines
+("clear 60", "anomaly 50"); the old hard-coded 50/60 are only a fallback before the first
+status arrives. Test: `test_ml_thresholds_in_status_and_model`.
+Also added for Part C: `serial: {available, port, note}` in `/api/status` (tests
+`test_serial_availability_is_reported`, `test_serial_unavailable_when_forced_to_simulator`).
+
+### B7 Trend layout
+Done in Part A (`lib/grid.ts`): the health chart is in the same grid as the sensor charts;
+1920 px shows all five in one row, 1366 px shows 3 + 2 with the health chart spanning two
+columns, so no row has empty space.
+
+### B8 package-lock.json
+`dashboard/package-lock.json` is committed (it already was; updated with the new
+dependencies `lucide-react` and `@fontsource/inter` in the Part A commit).
+
+### Results
+- Backend pytest: **297 passed** (287 before; +10 new tests).
+- Vitest: **46 passed**. `tsc --noEmit` and `npm run build` clean. Contrast check passes.

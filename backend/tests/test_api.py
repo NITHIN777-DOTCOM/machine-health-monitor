@@ -199,3 +199,21 @@ def _with_dirs(settings: Settings, tmp_path) -> Settings:
     settings.recordings_dir = tmp_path
     settings.models_dir = MODELS_DIR
     return settings
+
+
+def test_ml_thresholds_in_status_and_model(client):
+    expected = {"anomaly_health": 50, "anomaly_rows": 3, "clear_health": 60, "clear_rows": 5}
+    assert client.get("/api/status").json()["ml_thresholds"] == expected
+    assert client.get("/api/model").json()["ml_thresholds"] == expected
+
+
+def test_serial_availability_is_reported(client):
+    serial = client.get("/api/status").json()["serial"]
+    assert serial["available"] is False and "No Arduino found" in serial["note"]
+
+
+def test_serial_unavailable_when_forced_to_simulator(client):
+    main.app.state.mhm.settings.force_source = "simulator"
+    serial = client.get("/api/status").json()["serial"]
+    assert serial == {"available": False, "port": None,
+                      "note": "Serial disabled (MHM_SOURCE=simulator). Unset it and restart to use the Arduino."}

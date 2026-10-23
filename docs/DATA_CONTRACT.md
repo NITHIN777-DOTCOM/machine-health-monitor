@@ -328,15 +328,71 @@ so they remain clean training data and the analysis can always be recomputed.
 - `overall` = the worse of the rules state and the ML verdict. **ML is advisory**: an ML
   ANOMALY can raise the overall status to WARNING, never to CRITICAL. Only the threshold
   rules can make it CRITICAL.
-- `alert_source` = `rules`, `ml`, `both` or `none`, and `headline` is one human sentence,
-  e.g. "Vibration high - ML anomaly (health 34)" or "Temperature rising - CRITICAL in ~2 min".
+- `alert_source` = `rules`, `ml`, `both` or `none`.
+- `headline` is one short human sentence and `headline_detail` a smaller second line with
+  the exact values (or `null`):
+
+  | Situation | `headline` | `headline_detail` |
+  |---|---|---|
+  | Rule limits | "Sound level and vibration above critical limits" | "Sound level 143, crit limit 120 · Vibration 64, crit limit 60 · ML anomaly (health 0)" |
+  | Core sensor empty | "Sensor fault: DHT11" | "DHT11: no reading" |
+  | ML only | "Unusual vibration pattern (health 34)" | "Vibration: far above normal" |
+  | ML clearing | "Back to normal; ML anomaly clearing in 4 s" | "Health 90" |
+  | Forecast | "Temperature may reach critical in ~3 min" | "Temperature rising: warning in ~1 min, critical in ~3 min" |
+  | Normal | "All systems normal" | "Health 98", or "ML warming up: 9 s left" |
+
+  Names drop their explanation in brackets ("Sound level (peak deviation)" → "Sound level").
+
+**Health score** (0–100, `ml.health`; `backend/app/ml/scorer.py`):
+
+- IF part: r = (score − threshold) / (median − threshold). For r ≥ 0 it is 50 + 50·r
+  (100 at the median normal window, 50 at the model's decision threshold). Below the
+  threshold it decays softly as 50 / (1 − r): 25 one "normal spread" below, 12.5 at three.
+  IsolationForest scores saturate outside the training data, so this part alone never says 0.
+- Range part: excess = the largest distance of any window feature beyond its training
+  min/max, in training standard deviations. Range part = 100 − 16.7·ln(1 + excess / 0.28),
+  clamped 0..100 (`k`, `b` in `model_meta.json` → `range_excess`).
+- health = min(IF part, range part). Moderately out-of-range values give a mid score and only
+  extreme values reach 0:
+
+  | Window (other sensors normal) | excess | health (Phase 3 formula) | health (Phase 5) |
+  |---|---|---|---|
+  | temperature 31.5 °C | 1.4 | 71.5 | 70 |
+  | temperature 32.5 °C | 2.6 | 51 | 61 |
+  | humidity 85 % | 3.4 | 31 | 57 |
+  | vibration 8 /s | 6.4 | 0 | 44 |
+  | vibration 13 /s (normal 0–6) | 13.8 | 0 | 35 |
+  | vibration 20 /s | 24 | 0 | 25 |
+  | sound 45 | 46 | 0 | 15 |
+  | vibration 64 /s | 89 | 0 | 4 |
+  | vibration 120 /s | 171 | 0 | 0 |
+
+**Causes** (`ml.causes`, top 2): each has the window `feature`, its `z` (standard deviations
+from the normal mean, capped at ±99), a `band` and plain-language `text`, e.g.
+"Vibration: far above normal". Bands of |z|: **< 2 normal, 2–3 slight, 3–6 clear, ≥ 6 far**.
+Words by statistic: level features (mean/last/min/max) "slightly high / above normal / far
+above normal" (or low/below); std "slightly unstable / unstable / very unstable" (or
+"unusually steady"); slope "rising slightly / rising / rising fast" (or falling). The
+dashboard shows the words and puts z only in a tooltip (never a capped value like 99).
 
 **ML status** is one of `OK`, `ANOMALY`, `WARMING_UP` (window not full yet; seconds left
 are shown), `ML_UNAVAILABLE` (an ML sensor is missing in more than 30% of the window,
 e.g. a DHT11 fault), `NO_MODEL`, `NEEDS_RETRAIN` (the registry's ML sensors differ from
 the model's; ML is off and the rules keep working). It is smoothed so it cannot flicker:
 it becomes ANOMALY only after health < 50 for 3 consecutive rows and clears only after
-health > 60 for 5 consecutive rows.
+health > 60 for 5 consecutive rows. These levels come from `settings.json` and are sent as
+`ml_thresholds` (`anomaly_health`, `anomaly_rows`, `clear_health`, `clear_rows`) in
+`GET /api/status` and `GET /api/model`, so the dashboard never hard-codes them.
+
+**Forecast** per `forecast: true` sensor: `status` is `approaching`, `reached`, `stable`,
+`insufficient_data`, or **`no_data` as soon as the newest row has no value** for that sensor
+(e.g. the DHT11 failed): it never reports "stable" from old readings. `r2` is the line fit;
+the dashboard shows it as **confidence: low (R² < 0.6, the backend does not trust a trend
+below `forecast_min_r2`), medium (0.6–0.85), high (≥ 0.85)**, with R² in a tooltip.
+
+`GET /api/status` also has `serial`: `{available, port, note}`. `available` is false with
+`MHM_SOURCE=simulator` (ports are never listed) or when no Arduino is found (checked at most
+every 5 s), and `note` says why.
 
 **Warm start.** A recording's last W + 60 s can pre-fill the ML window and the forecast
 history, so a new source doesn't start with "warming up". For the first W live rows the

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -30,16 +31,71 @@ _WORDS = {
     "std": ("unstable", "unusually steady"), "slope": ("rising", "falling"),
 }
 
+# Plain-language bands of |z| (DATA_CONTRACT.md section 9). The dashboard's
+# lib/format.ts causeWords() uses the same table.
+Z_BANDS = ((6.0, "far"), (3.0, "clear"), (2.0, "slight"))
+_PLAIN = {   # stat kind -> sign -> band -> words
+    "level": {1: {"slight": "slightly high", "clear": "above normal", "far": "far above normal"},
+              -1: {"slight": "slightly low", "clear": "below normal", "far": "far below normal"}},
+    "std": {1: {"slight": "slightly unstable", "clear": "unstable", "far": "very unstable"},
+            -1: {"slight": "slightly steady", "clear": "unusually steady", "far": "unusually steady"}},
+    "slope": {1: {"slight": "rising slightly", "clear": "rising", "far": "rising fast"},
+              -1: {"slight": "falling slightly", "clear": "falling", "far": "falling fast"}},
+}
 
-def raw_health(score: float, cal: Mapping[str, float], excess: float = 0.0, stds_per_50: float = 3.0) -> float:
-    """Unclamped health; below 50 means anomaly. See training.py for the rules."""
+
+def z_band(z: float) -> str:
+    """|z| < 2 normal, 2-3 slight, 3-6 clear, >= 6 far."""
+    return next((band for limit, band in Z_BANDS if abs(z) >= limit), "normal")
+
+
+def plain_words(stat: str, z: float) -> str:
+    """"far above normal", "slightly unstable", "rising", "normal", ..."""
+    band = z_band(z)
+    if band == "normal":
+        return "normal"
+    kind = stat if stat in ("std", "slope") else "level"
+    return _PLAIN[kind][1 if z >= 0 else -1][band]
+
+
+def short_name(display_name: str) -> str:
+    """"Sound level (peak deviation)" -> "Sound level": the name without its explanation."""
+    return re.sub(r"\s*\(.*?\)", "", display_name).strip() or display_name
+
+
+# Range term defaults (training.py writes them into model_meta.json "range_excess").
+RANGE_K = 16.7    # health points per e-fold of (1 + excess / RANGE_B)
+RANGE_B = 0.28    # excess (training stds) at which the log curve starts to bend
+
+
+def if_health(score: float, cal: Mapping[str, float]) -> float:
+    """IsolationForest part, 0..100. Linear from 100 (median normal score) to 50 (the
+    decision threshold); below the threshold it decays softly as 50 / (1 + d), d = distance
+    below the threshold in units of (median - threshold): 1 -> 25, 3 -> 12.5. IF scores
+    saturate outside the training data, so this part alone never claims "0"."""
     t, m = cal["threshold_score"], cal["median_score"]
-    return 50.0 + 50.0 * (score - t) / (m - t) - 50.0 * excess / stds_per_50
+    r = (score - t) / (m - t)
+    return float(min(100.0, 50.0 + 50.0 * r)) if r >= 0 else float(50.0 / (1.0 - r))
 
 
-def health_from_score(score: float, cal: Mapping[str, float], excess: float = 0.0, stds_per_50: float = 3.0) -> float:
-    """0..100: 100 at the median normal score, 50 at the decision threshold, 0 beyond."""
-    return float(min(100.0, max(0.0, raw_health(score, cal, excess, stds_per_50))))
+def range_health(excess: float, k: float = RANGE_K, b: float = RANGE_B) -> float:
+    """Range part, 0..100: 100 inside the training range, then a log curve so moderately
+    out-of-range values give a mid score and only extreme ones reach 0.
+    excess 1.4 -> 70, 2.6 -> 61, 6.4 -> 47, 13.8 -> 35, 24 -> 26, 39 -> 18, 89 -> 4, >= 120 -> 0."""
+    return float(min(100.0, max(0.0, 100.0 - k * float(np.log1p(max(0.0, excess) / b)))))
+
+
+def raw_health(score: float, cal: Mapping[str, float], excess: float = 0.0,
+               k: float = RANGE_K, b: float = RANGE_B) -> float:
+    """Health 0..100; below 50 means anomaly. The worse of the two parts."""
+    return min(if_health(score, cal), range_health(excess, k, b))
+
+
+def health_from_score(score: float, cal: Mapping[str, float], excess: float = 0.0,
+                      k: float = RANGE_K, b: float = RANGE_B) -> float:
+    """0..100: 100 at the median normal score, 50 at the decision threshold, then a soft
+    decay; the range term pulls it further down for values outside the training range."""
+    return float(min(100.0, max(0.0, raw_health(score, cal, excess, k, b))))
 
 
 class Scorer:
@@ -111,8 +167,8 @@ class Scorer:
         s = float(self.model.score_samples(to_vector(features, names))[0])
         cal = self.meta["calibration"]
         excess = self.range_excess(features)
-        per50 = self.meta.get("range_excess", {}).get("stds_per_50_health", 3.0)
-        raw = raw_health(s, cal, excess, per50)
+        rx = self.meta.get("range_excess", {})
+        raw = raw_health(s, cal, excess, rx.get("k", RANGE_K), rx.get("b", RANGE_B))
         status = ANOMALY if raw < 50.0 else OK
         return {
             "ml_status": status,
@@ -155,7 +211,7 @@ class Scorer:
             sensor = self.registry.get(key)
             display = sensor.display_name if sensor else key
             out.append({"sensor": key, "feature": name, "z": round(z, 2), "direction": word,
-                        "text": f"{display} {word}"})
+                        "band": z_band(z), "text": f"{short_name(display)}: {plain_words(stat, z)}"})
         return out
 
     def info(self) -> dict[str, Any]:

@@ -2,19 +2,21 @@
 
 Health calibration (stored in model_meta.json, used by scorer.health_from_score):
   s = IsolationForest score_samples() of a window (higher = more normal)
-  m = median score of the training (normal) windows          -> health 100
-  t = the model's decision threshold (offset_, ~1% quantile) -> health 50
-  a = t - (m - t), as far below the threshold as the median is above it -> health 0
-  health = 50 + 50 * (s - t) / (m - t), clamped to 0..100
-So a typical normal window scores ~100, the boundary the model was fitted to is 50, and
-anything at least "one normal spread" beyond the boundary is 0.
+  m = median score of the training (normal) windows          -> 100
+  t = the model's decision threshold (offset_, ~1% quantile) -> 50
+  r = (s - t) / (m - t)
+  IF part = 50 + 50 * r (max 100) when r >= 0, else 50 / (1 - r) (soft decay: 25 at one
+  "normal spread" below the threshold, 12.5 at three). IF scores saturate outside the
+  training data, so the IF part alone never says 0.
 
 Range excess: IsolationForest cannot tell HOW FAR outside the training range a value is
 (a vibration of 80 lands in the same leaf as the largest normal value, 7). So the scorer
 also measures, per feature, how many training standard deviations the value lies beyond
-the training min/max, takes the largest of these ("excess"), and subtracts
-50 * excess / STDS_PER_50_HEALTH from the health. Training windows have excess 0 by
-definition, so the calibration above is unchanged.
+the training min/max and takes the largest ("excess"). Range part =
+100 - K * ln(1 + excess / B), clamped 0..100 (K = 16.7, B = 0.28): moderately out-of-range
+values give a mid score (vibration 13 vs a normal 0-6: ~35), extreme ones reach 0.
+health = min(IF part, range part). Training windows have excess 0 by definition, so the
+calibration above is unchanged.
 """
 from __future__ import annotations
 
@@ -33,11 +35,20 @@ from sklearn.ensemble import IsolationForest
 from ..registry import Registry
 from .dataset import Dataset
 from .features import FeatureWindow, feature_names, ml_sensor_keys
-from .scorer import health_from_score
+from .scorer import RANGE_B, RANGE_K, health_from_score
 
 MIN_WINDOWS = 50
 STD_FLOOR = 1e-3
-STDS_PER_50_HEALTH = 3.0   # range excess that costs 50 health points
+
+
+CALIBRATION_RULE = ("r = (score - threshold)/(median - threshold); IF part = 50 + 50*r (max 100) if r >= 0, "
+                    "else 50/(1 - r); health = min(IF part, range part)")
+RANGE_EXCESS_META = {
+    "k": RANGE_K,
+    "b": RANGE_B,
+    "rule": "excess = max over features of (distance beyond training min/max) / training std; "
+            "range part = 100 - k*ln(1 + excess/b), clamped 0..100",
+}
 
 
 class TrainingError(Exception):
@@ -81,8 +92,7 @@ def calibrate(scores: np.ndarray, threshold: float) -> dict[str, float]:
         "median_score": median,
         "threshold_score": float(threshold),
         "abnormal_score": float(threshold - (median - threshold)),
-        "rule": "health = 50 + 50*(score - threshold)/(median - threshold), clamped 0..100; "
-                "100 at the median normal score, 50 at the decision threshold, 0 at threshold - (median - threshold)",
+        "rule": CALIBRATION_RULE,
     }
 
 
@@ -129,11 +139,7 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
         "normal_stats": {n: {"mean": float(X[:, i].mean()), "std": max(float(X[:, i].std()), STD_FLOOR),
                              "min": float(X[:, i].min()), "max": float(X[:, i].max())}
                          for i, n in enumerate(names)},
-        "range_excess": {
-            "stds_per_50_health": STDS_PER_50_HEALTH,
-            "rule": "excess = max over features of (distance beyond training min/max) / training std; "
-                    "health -= 50 * excess / stds_per_50_health",
-        },
+        "range_excess": RANGE_EXCESS_META,
         "provisional": synthetic_used,
         "provisional_reason": ("trained on synthetic data; retrain on real normal recordings (Phase 8)"
                                if synthetic_used else None),

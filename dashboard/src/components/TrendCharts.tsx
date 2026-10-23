@@ -25,6 +25,8 @@ export interface LimitLine {
   y: number;
   label: string;
   kind: "warn" | "crit";
+  /** Vertical label offset in px. */
+  dy?: number;
 }
 
 interface ChartProps {
@@ -63,7 +65,8 @@ const TrendChart = memo(function TrendChart({ title, unit, data, lines, domain, 
                 strokeDasharray={l.kind === "crit" ? "6 3" : "3 3"}
                 strokeWidth={1}
                 ifOverflow="extendDomain"
-                label={{ value: l.label, position: "right", fill: "var(--muted)", fontSize: 12 }}
+                // Lines close together (health: clear 60 / anomaly 50) nudge their labels apart.
+                label={{ value: l.label, position: "right", fill: "var(--muted)", fontSize: 12, dy: l.dy ?? 0 }}
               />
             ))}
             <Line

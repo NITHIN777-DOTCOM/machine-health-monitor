@@ -11,10 +11,9 @@ import { TrendCharts } from "./components/TrendCharts";
 import { useDashboard, type DashboardData } from "./hooks/useDashboard";
 import { useTheme } from "./hooks/useTheme";
 import { enabledSensors } from "./lib/cards";
-import { linkView, modeView } from "./lib/format";
+import { DEFAULT_HEALTH_LEVELS, linkView, modeView } from "./lib/format";
 
 const DEFAULT_HOLD_S = 5;
-const HEALTH_LINES = [{ y: 50, label: "anomaly 50", kind: "crit" as const }];
 
 /** Why the data on screen may be old; null when it is current. */
 function connectionNotice(d: DashboardData): string | null {
@@ -43,6 +42,11 @@ export default function App() {
   const sensors = useMemo(() => enabledSensors(d.registry), [d.registry]);
   const holdSeconds = d.status?.device.hold_seconds ?? DEFAULT_HOLD_S;
   const notice = connectionNotice(d);
+  const levels = d.status?.ml_thresholds ?? DEFAULT_HEALTH_LEVELS;
+  const healthLines = useMemo(() => [
+    { y: levels.clear_health, label: `clear ${levels.clear_health}`, kind: "warn" as const, dy: -7 },
+    { y: levels.anomaly_health, label: `anomaly ${levels.anomaly_health}`, kind: "crit" as const, dy: 7 },
+  ], [levels.anomaly_health, levels.clear_health]);
 
   return (
     <div className="app">
@@ -57,11 +61,11 @@ export default function App() {
         <StatusBanner analysis={d.analysis} holdSeconds={holdSeconds} />
         <div className="cards-row">
           <DeviceCard device={d.analysis?.device ?? null} holdSeconds={holdSeconds} />
-          <MlCard ml={d.analysis?.ml ?? null} />
+          <MlCard ml={d.analysis?.ml ?? null} registry={d.registry} levels={levels} />
           <ForecastPanel analysis={d.analysis} registry={d.registry} />
         </div>
         <SensorCards registry={d.registry} row={d.row} />
-        <TrendCharts sensors={sensors} points={d.points} healthLines={HEALTH_LINES} />
+        <TrendCharts sensors={sensors} points={d.points} healthLines={healthLines} />
       </main>
       <Footer status={d.status} />
     </div>

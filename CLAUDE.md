@@ -73,8 +73,11 @@ Dashboard (from `dashboard/`): `npm install` once, `npm run dev` (http://127.0.0
 - **ML is advisory:** an ANOMALY can raise overall to WARNING, **never CRITICAL**; only rules make CRITICAL.
   ML smoothing: ANOMALY after health < 50 for 3 rows, clears after > 60 for 5 rows.
   Statuses: OK, ANOMALY, WARMING_UP, ML_UNAVAILABLE, NO_MODEL, NEEDS_RETRAIN (sensor list changed; rules keep working).
-- Health: IsolationForest score calibrated (100 at median normal, 50 at threshold, 0 below) minus a
-  range-excess term (−50 per 3 std beyond the training min/max; IF alone saturates outside its range).
+- Health (Phase 5): min(IF part, range part). IF part 100 at median normal, 50 at threshold, soft decay
+  50/(1−r) below; range part 100 − 16.7·ln(1 + excess/0.28) (excess = std beyond training min/max). Vibration 13
+  → ~35, extreme → 0. Causes are plain words by |z| band (<2 normal, 2–3 slight, 3–6 clear, ≥6 far).
+  Headline is short + `headline_detail` with values. Forecast `no_data` when the newest value is missing.
+  `ml_thresholds` and `serial` {available, note} are in /api/status.
 - **Data rules (enforced in code):** train on `label=normal` only; synthetic data for training only (→ model
   `provisional: true`); **no accuracy numbers without real recordings with induced, labelled faults**:
   evaluate.py refuses otherwise, and `--dev-synthetic` output is stamped "SIMULATED DATA - NOT A RESULT".

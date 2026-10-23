@@ -85,13 +85,14 @@ export interface BannerText {
   recovering: boolean;
 }
 
-/** Banner text from the analysis block. Shows "Recovering - back to normal in N s" only
+/** Banner text from the analysis block (headline + its detail line). Shows "Recovering - back to normal in N s" only
  *  when the rules' hold countdown has progressed; otherwise the active state and reason
  *  (without the "recovering, was:" wording). ML usually still flags the fault during the
  *  countdown (its window still holds it), and ML alone keeps the overall at WARNING, so
  *  WARNING -> NORMAL with an ML anomaly says the rules clear but ML is still active. */
 export function bannerText(
   headline: string,
+  headlineDetail: string | null,
   device: Pick<AnalysisDevice, "state" | "reported" | "reason" | "hold_remaining_s">,
   alertSource: AlertSource,
   holdSeconds: number,
@@ -112,7 +113,7 @@ export function bannerText(
       recovering: true,
     };
   }
-  return { headline: stripRecovering(headline), detail: null, recovering: false };
+  return { headline: stripRecovering(headline), detail: headlineDetail ? prettyOps(headlineDetail) : null, recovering: false };
 }
 
 // ---- ML ------------------------------------------------------------------------------------
@@ -149,40 +150,107 @@ export function mlView(ml: MlBlock | null | undefined): MlView {
   }
 }
 
-/** Health 0-100 -> band. 50 is the anomaly threshold by construction of the score
- *  (100 = median normal, 50 = threshold); 60 is where an anomaly clears. */
-export function healthTone(health: number | null | undefined): Tone {
+/** ML anomaly / clear health levels; the backend sends the real ones (status.ml_thresholds). */
+export interface HealthLevels {
+  anomaly_health: number;
+  clear_health: number;
+}
+
+/** Used only until the first status message arrives. */
+export const DEFAULT_HEALTH_LEVELS: HealthLevels = { anomaly_health: 50, clear_health: 60 };
+
+/** Health 0-100 -> band: below the anomaly level "unusual", up to the clear level
+ *  "borderline", above it "healthy". */
+export function healthTone(health: number | null | undefined, levels: HealthLevels = DEFAULT_HEALTH_LEVELS): Tone {
   if (health == null) return "neutral";
-  if (health < 50) return "ml";
-  if (health <= 60) return "warning";
+  if (health < levels.anomaly_health) return "ml";
+  if (health <= levels.clear_health) return "warning";
   return "normal";
 }
 
-export function healthLabel(health: number | null | undefined): string {
+export function healthLabel(health: number | null | undefined, levels: HealthLevels = DEFAULT_HEALTH_LEVELS): string {
   if (health == null) return "no score";
-  if (health < 50) return "unusual";
-  if (health <= 60) return "borderline";
+  if (health < levels.anomaly_health) return "unusual";
+  if (health <= levels.clear_health) return "borderline";
   return "healthy";
 }
 
-/** "Vibration unstable, z=4.1". */
-export function causeText(cause: MlCause): string {
-  return `${cause.text}, z=${cause.z.toFixed(1)}`;
+// ---- ML causes in plain words ------------------------------------------------------------
+// |z| = how many training standard deviations a window feature is from its normal mean.
+// Bands (same table as backend/app/ml/scorer.py and DATA_CONTRACT.md section 9):
+//   |z| < 2 normal · 2-3 slight · 3-6 clear · >= 6 far
+
+export type ZBand = "normal" | "slight" | "clear" | "far";
+
+export function zBand(z: number): ZBand {
+  const a = Math.abs(z);
+  return a >= 6 ? "far" : a >= 3 ? "clear" : a >= 2 ? "slight" : "normal";
+}
+
+const PLAIN: Record<"level" | "std" | "slope", Record<"up" | "down", Record<Exclude<ZBand, "normal">, string>>> = {
+  level: {
+    up: { slight: "slightly high", clear: "above normal", far: "far above normal" },
+    down: { slight: "slightly low", clear: "below normal", far: "far below normal" },
+  },
+  std: {
+    up: { slight: "slightly unstable", clear: "unstable", far: "very unstable" },
+    down: { slight: "slightly steady", clear: "unusually steady", far: "unusually steady" },
+  },
+  slope: {
+    up: { slight: "rising slightly", clear: "rising", far: "rising fast" },
+    down: { slight: "falling slightly", clear: "falling", far: "falling fast" },
+  },
+};
+
+/** "far above normal", "unstable", "rising", "normal", ... for a feature (e.g.
+ *  "vib_count__std") and its z. */
+export function causeWords(feature: string, z: number): string {
+  const band = zBand(z);
+  if (band === "normal") return "normal";
+  const stat = feature.split("__")[1] ?? "mean";
+  const kind = stat === "std" || stat === "slope" ? stat : "level";
+  return PLAIN[kind][z >= 0 ? "up" : "down"][band];
+}
+
+/** "Sound level (peak deviation)" -> "Sound level". */
+export function shortName(displayName: string): string {
+  return displayName.replace(/\s*\(.*?\)/g, "").trim() || displayName;
+}
+
+/** "Vibration: far above normal". The z value goes in the tooltip only (causeTooltip). */
+export function causeText(cause: MlCause, displayName?: string): string {
+  const name = shortName(displayName ?? cause.text.split(":")[0] ?? cause.sensor);
+  return `${name}: ${causeWords(cause.feature, cause.z)}`;
+}
+
+/** Above this |z| the exact number means little (and the backend caps it at 99). */
+export const Z_TOOLTIP_MAX = 10;
+
+/** Tooltip: "z = 4.1: 4.1 standard deviations above the normal mean (window feature ...)".
+ *  Never shows a capped value like z = 99. */
+export function causeTooltip(cause: MlCause): string {
+  const a = Math.abs(cause.z);
+  const side = cause.z >= 0 ? "above" : "below";
+  const what = a >= Z_TOOLTIP_MAX
+    ? `more than ${Z_TOOLTIP_MAX} standard deviations ${side} the normal mean`
+    : `z = ${cause.z.toFixed(1)}: ${a.toFixed(1)} standard deviations ${side} the normal mean`;
+  return `${what} (window feature ${cause.feature})`;
 }
 
 // ---- forecast ----------------------------------------------------------------------------
 
-function etaPart(level: "WARNING" | "CRITICAL", eta: string | null): string | null {
+function etaPart(level: "warning" | "critical", eta: string | null): string | null {
   if (eta == null) return null;
   return eta === "reached" ? `${level} reached` : `${level} in ${eta}`;
 }
 
-/** "Temperature: WARNING in ~1 min, CRITICAL in ~3 min", "Temperature: stable", ... from the
- *  forecast fields. Once critical is reached, the warn part is no longer news. */
+/** "Temperature: warning in ~1 min, critical in ~3 min", "Temperature: stable",
+ *  "Temperature: no data", ... Once critical is reached, the warn part is no longer news. */
 export function forecastText(name: string, f: ForecastEntry | null | undefined): string {
+  if (f?.status === "no_data") return `${name}: no data`;
   if (!f || f.status === "insufficient_data") return `${name}: collecting data`;
-  if (f.to_critical === "reached") return `${name}: CRITICAL reached`;
-  const parts = [etaPart("WARNING", f.to_warn), etaPart("CRITICAL", f.to_critical)]
+  if (f.to_critical === "reached") return `${name}: critical reached`;
+  const parts = [etaPart("warning", f.to_warn), etaPart("critical", f.to_critical)]
     .filter((p): p is string => p != null);
   return `${name}: ${parts.length ? parts.join(", ") : "stable"}`;
 }
@@ -192,7 +260,24 @@ export function forecastTone(f: ForecastEntry | null | undefined): Tone {
   if (!f) return "neutral";
   if (f.to_critical === "reached" || f.seconds_to_critical != null) return "critical";
   if (f.to_warn === "reached" || f.seconds_to_warn != null) return "warning";
-  return f.status === "insufficient_data" ? "neutral" : "normal";
+  return f.status === "insufficient_data" || f.status === "no_data" ? "neutral" : "normal";
+}
+
+export type Confidence = "low" | "medium" | "high";
+
+/** Fit quality of the forecast line in words. R² bands: < 0.6 low (the backend does not
+ *  trust a trend below forecast_min_r2 = 0.6), 0.6-0.85 medium, >= 0.85 high. */
+export function confidence(r2: number | null | undefined): Confidence | null {
+  if (r2 == null || !Number.isFinite(r2)) return null;
+  return r2 >= 0.85 ? "high" : r2 >= 0.6 ? "medium" : "low";
+}
+
+/** Second line of a forecast: "rising · confidence: high", "no clear trend", ... */
+export function forecastDetail(f: ForecastEntry | null | undefined): string {
+  if (!f || f.status === "insufficient_data") return "not enough data yet";
+  if (f.status === "no_data") return "sensor has no current reading";
+  if (f.trend === "rising" || f.trend === "falling") return `${f.trend} · confidence: ${confidence(f.r2) ?? "low"}`;
+  return "no clear trend";
 }
 
 export function trendIcon(trend: ForecastEntry["trend"]): IconName {

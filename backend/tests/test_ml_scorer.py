@@ -5,7 +5,8 @@ import pytest
 from app.ml import training
 from app.ml.dataset import Dataset, Segment
 from app.ml.features import FeatureWindow
-from app.ml.scorer import ANOMALY, NEEDS_RETRAIN, NO_MODEL, OK, WARMING_UP, Scorer, health_from_score
+from app.ml.scorer import (ANOMALY, NEEDS_RETRAIN, NO_MODEL, OK, WARMING_UP, Scorer, health_from_score, plain_words,
+                           short_name, z_band)
 from helpers import sim_rows
 
 
@@ -70,8 +71,11 @@ def test_health_calibration_anchor_points():
     assert (m, t) == (-0.50, -0.58) and a == pytest.approx(-0.66)
     assert health_from_score(m, cal) == pytest.approx(100)
     assert health_from_score(t, cal) == pytest.approx(50)
-    assert health_from_score(a, cal) == pytest.approx(0)
-    assert health_from_score(0.0, cal) == 100 and health_from_score(-5.0, cal) == 0
+    # Below the threshold the IF part decays softly (IF scores saturate outside the training
+    # data, so on its own it never claims 0): 25 one normal spread below, 12.5 at three.
+    assert health_from_score(a, cal) == pytest.approx(25)
+    assert health_from_score(t - 3 * (m - t), cal) == pytest.approx(12.5)
+    assert health_from_score(0.0, cal) == 100 and 0 < health_from_score(-5.0, cal) < 2
     grid = np.linspace(-1, 0, 200)
     hs = [health_from_score(s, cal) for s in grid]
     assert all(0 <= h <= 100 for h in hs) and hs == sorted(hs)
@@ -106,7 +110,7 @@ def test_vibration_fault_is_anomaly_with_cause(scorer, reg):
     assert result["ml_status"] == ANOMALY and result["health"] < 50 and result["range_excess"] > 3
     top = result["causes"][0]
     assert top["sensor"] == "vib_count" and top["direction"] == "high" and top["z"] > 3
-    assert top["text"] == "Vibration high" and len(result["causes"]) == 2
+    assert top["text"] == "Vibration: far above normal" and top["band"] == "far" and len(result["causes"]) == 2
 
 
 def test_range_excess_is_zero_inside_training_range(scorer, reg):
@@ -114,12 +118,31 @@ def test_range_excess_is_zero_inside_training_range(scorer, reg):
     assert max(scorer.range_excess(f) for f in fs) == 0.0
 
 
-def test_range_excess_lowers_health():
+def test_range_excess_lowers_health_gradually():
     cal = {"threshold_score": -0.58, "median_score": -0.50}
-    assert health_from_score(-0.50, cal, excess=0.0) == pytest.approx(100)
-    assert health_from_score(-0.50, cal, excess=1.5) == pytest.approx(75)
-    assert health_from_score(-0.50, cal, excess=3.0) == pytest.approx(50)
-    assert health_from_score(-0.50, cal, excess=30.0) == 0.0
+    h = lambda e: health_from_score(-0.50, cal, excess=e)     # noqa: E731 - a healthy IF score
+    assert h(0.0) == pytest.approx(100)
+    # Moderately out of range -> a mid score, not 0 (vibration 13 vs a normal 0-6 is ~14 stds).
+    assert 60 < h(1.5) < 75 and 45 < h(6.0) < 50 and 30 <= h(13.8) <= 40
+    assert 0 < h(89) < 10 and h(200) == 0.0                     # extreme values still reach 0
+    es = np.linspace(0, 300, 301)
+    hs = [h(e) for e in es]
+    assert hs == sorted(hs, reverse=True)
+
+
+def test_health_is_the_worse_of_both_parts():
+    cal = {"threshold_score": -0.58, "median_score": -0.50}
+    assert health_from_score(-0.58, cal, excess=0.0) == pytest.approx(50)     # IF part decides
+    assert health_from_score(-0.58, cal, excess=13.8) < 40                     # range part decides
+    assert health_from_score(-0.66, cal, excess=1.0) == pytest.approx(25)     # IF part decides
+
+
+def test_vibration_13_is_a_mid_score(scorer, reg):
+    rows = sim_rows(reg, "normal", 15, 9)
+    for r in rows:
+        r.values["vib_count"] = 13.0 + (r.ms // 1000) % 3 - 1
+    result = scorer.score(windows(scorer, rows)[-1])
+    assert result["ml_status"] == ANOMALY and 20 <= result["health"] <= 45
 
 
 def test_warming_up(scorer):
@@ -161,3 +184,25 @@ def test_save_and_load_roundtrip(reg, trained, tmp_path):
 def test_window_comes_from_model_meta(scorer):
     fw = scorer.make_window()
     assert isinstance(fw, FeatureWindow) and fw.window_ms == 10_000
+
+
+# ---- plain-language causes ------------------------------------------------------------
+
+def test_z_bands():
+    assert [z_band(z) for z in (0, 1.99, 2, -2.5, 3, 5.9, 6, -99)] == [
+        "normal", "normal", "slight", "slight", "clear", "clear", "far", "far"]
+
+
+def test_plain_words_by_statistic():
+    assert plain_words("mean", 1.0) == "normal"
+    assert plain_words("mean", 2.4) == "slightly high"
+    assert plain_words("last", 4.0) == "above normal"
+    assert plain_words("max", 64.5) == "far above normal"
+    assert plain_words("min", -7) == "far below normal"
+    assert plain_words("std", 3.5) == "unstable"
+    assert plain_words("slope", -6.5) == "falling fast"
+
+
+def test_short_name_drops_the_explanation():
+    assert short_name("Sound level (peak deviation)") == "Sound level"
+    assert short_name("Vibration") == "Vibration"

@@ -18,10 +18,13 @@ from .ml.scorer import Scorer
 from .models import SensorRow
 from .sources import ReplaySource, SerialSource, SimulatorSource, Source
 from .sources.replay import resolve_recording
+from .sources.serial_source import port_exists, resolve_port
 from .sources.simulator import load_profile
 from .state import AppState
 
 log = logging.getLogger(__name__)
+
+SERIAL_CHECK_S = 5.0
 
 
 class Pipeline:
@@ -44,6 +47,7 @@ class Pipeline:
         self.scorer = Scorer.load(state.registry, state.settings.models_dir)
         self.analyzer = Analyzer(state.registry, state.settings, self.scorer)
         self.train_jobs = TrainJobs(state.registry, state.settings, on_done=self.reload_model)
+        self._serial_cache: tuple[float, dict[str, Any]] | None = None
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -184,6 +188,7 @@ class Pipeline:
             "range_excess": m.get("range_excess"),
             "sklearn_version": m.get("sklearn_version"),
             "provisional_reason": m.get("provisional_reason"),
+            "ml_thresholds": self.ml_thresholds(),
         }
 
     # ---- status ------------------------------------------------------------------------
@@ -239,7 +244,36 @@ class Pipeline:
             "startup_reason": st.startup_reason,
             "registry_warnings": st.registry.warnings,
             "scenarios": sorted(self.sim_profile["scenarios"]),
+            "ml_thresholds": self.ml_thresholds(),
+            "serial": self.serial_info(),
         }
+
+    def serial_info(self) -> dict[str, Any]:
+        """Whether switching to serial can work, for the dashboard's source switcher.
+        MHM_SOURCE=simulator never lists ports; otherwise the port list is checked at most
+        every SERIAL_CHECK_S seconds (status is sent often)."""
+        if self.state.settings.force_source == "simulator":
+            return {"available": False, "port": None,
+                    "note": "Serial disabled (MHM_SOURCE=simulator). Unset it and restart to use the Arduino."}
+        if isinstance(self.source, SerialSource):
+            return {"available": True, "port": self.source.status().get("serial_port"), "note": None}
+        now = time.monotonic()
+        if self._serial_cache is None or now - self._serial_cache[0] > SERIAL_CHECK_S:
+            try:
+                port, how = resolve_port(self.state.settings)
+                ok = port is not None and (how == "auto-detected" or port_exists(port))
+                info = {"available": ok, "port": port if ok else None,
+                        "note": None if ok else "No Arduino found. Plug in the Uno and close the Arduino IDE Serial Monitor."}
+            except Exception as exc:  # noqa: BLE001 - a port listing error must not break status
+                info = {"available": False, "port": None, "note": f"Could not list serial ports: {exc}"}
+            self._serial_cache = (now, info)
+        return self._serial_cache[1]
+
+    def ml_thresholds(self) -> dict[str, float]:
+        """ML smoothing levels (settings.json), so the dashboard draws them without hard-coding."""
+        s = self.state.settings
+        return {"anomaly_health": s.ml_anomaly_health, "anomaly_rows": s.ml_anomaly_rows,
+                "clear_health": s.ml_clear_health, "clear_rows": s.ml_clear_rows}
 
     def device_status(self) -> dict[str, Any]:
         """Mirror state machine snapshot, plus what the device itself reported."""
