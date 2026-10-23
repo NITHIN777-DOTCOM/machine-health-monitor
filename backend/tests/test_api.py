@@ -174,3 +174,28 @@ def test_websocket_gets_status_on_source_change(client):
         msg = next(m for m in (ws.receive_json() for _ in range(100))
                    if m["type"] == "status" and m["status"]["scenario"] == "slow_drift")
     assert msg["status"]["speed"] == 20
+
+
+def test_mhm_source_simulator_never_touches_serial(monkeypatch, tmp_path):
+    """MHM_SOURCE=simulator: startup uses the simulator without listing ports, and a switch
+    to serial is refused (for running the software while another program holds the COM port)."""
+    monkeypatch.setenv("MHM_SOURCE", "simulator")
+    monkeypatch.setenv("MHM_PORT", "COM5")             # would normally pick serial
+    def no_ports():
+        raise AssertionError("serial ports must not be listed")
+    monkeypatch.setattr(serial_source.list_ports, "comports", no_ports)
+    real_load = main.load_settings
+    monkeypatch.setattr(main, "load_settings", lambda: _with_dirs(real_load(), tmp_path))
+    with TestClient(main.app) as c:
+        status = c.get("/api/status").json()
+        assert status["source"] == "simulator"
+        assert "MHM_SOURCE" in status["startup_reason"]
+        r = c.post("/api/source", json={"type": "serial"})
+        assert r.status_code == 400 and "MHM_SOURCE" in r.json()["detail"]
+        assert c.get("/api/status").json()["source"] == "simulator"
+
+
+def _with_dirs(settings: Settings, tmp_path) -> Settings:
+    settings.recordings_dir = tmp_path
+    settings.models_dir = MODELS_DIR
+    return settings

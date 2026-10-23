@@ -1,0 +1,222 @@
+// Shapes of the backend's REST and WebSocket messages. They mirror backend/app exactly:
+//   Sensor / Registry ........ registry.py  Sensor.to_dict() / Registry.to_dict()
+//   RowDict .................. models.py    SensorRow.to_dict()
+//   Analysis ................. analysis.py  Analyzer._combine()  (DATA_CONTRACT.md section 9)
+//   CompactAnalysis .......... analysis.py  compact()  (/api/history, detail=compact)
+//   Status ................... pipeline.py  Pipeline.status()
+// If the backend changes one of these, change it here too.
+
+export type DevState = "NORMAL" | "WARNING" | "CRITICAL";
+export type Mode = "live" | "recorded" | "simulated";
+export type DataSource = "real" | "synthetic";
+export type Label = "normal" | "fault" | "unknown";
+export type Direction = "above" | "below";
+export type AlertSource = "rules" | "ml" | "both" | "none";
+export type Link = "starting" | "ok" | "no_data" | "down" | "finished";
+export type SourceType = "simulator" | "serial" | "replay";
+
+/** ML status in the analysis block (ml.status). */
+export type MlStatus = "OK" | "ANOMALY" | "WARMING_UP" | "ML_UNAVAILABLE" | "NO_MODEL" | "NEEDS_RETRAIN";
+/** Model status (status.model.status): READY, or why ML is off. */
+export type ModelStatus = "READY" | "NO_MODEL" | "NEEDS_RETRAIN";
+
+// ---- registry (GET /api/sensors) -------------------------------------------------------
+
+export interface Sensor {
+  key: string;
+  display_name: string;
+  unit: string;
+  hardware: string;
+  pin: string;
+  warn: number | null;
+  critical: number | null;
+  direction: Direction;
+  hysteresis: number | null;
+  tier: "core" | "optional";
+  /** Effective flag (false if its group was disabled for a mismatch). */
+  enabled: boolean;
+  enabled_in_config: boolean;
+  include_in_ml: boolean;
+  in_ml: boolean;
+  forecast: boolean;
+  group: string | null;
+  comment: string | null;
+  limits_note: string | null;
+}
+
+export interface Registry {
+  schema_version: number | null;
+  csv_columns: string[];
+  sensors: Sensor[];
+  warnings: string[];
+}
+
+// ---- one row (contract section 5) ----------------------------------------------------------
+
+/** A stored row: ts_iso, the device columns, then mode/source/label. Sensor values are
+ *  keyed by registry key; an empty field is null, never 0. */
+export interface RowDict {
+  ts_iso: string;
+  ms: number | null;
+  dev_state: DevState | null;
+  mode: Mode;
+  source: DataSource;
+  label: Label;
+  [sensorKey: string]: number | string | null;
+}
+
+// ---- analysis block (contract section 9) ------------------------------------------------
+
+export interface MlCause {
+  sensor: string;
+  feature: string;
+  z: number;
+  /** "high", "low", "unstable", "rising", ... */
+  direction: string;
+  text: string;
+}
+
+export interface MlBlock {
+  status: MlStatus;
+  health: number | null;
+  causes: MlCause[];
+  provisional: boolean;
+  warmup_remaining_s: number | null;
+  settling_remaining_s: number | null;
+  clear_remaining_s: number | null;
+  instant: "OK" | "ANOMALY" | null;
+  message: string | null;
+  /** Only present when the window was scored. */
+  range_excess?: number | null;
+}
+
+export type ForecastStatus = "insufficient_data" | "stable" | "approaching" | "reached";
+
+export interface ForecastEntry {
+  trend: "rising" | "falling" | "stable" | null;
+  status: ForecastStatus;
+  seconds_to_warn: number | null;
+  seconds_to_critical: number | null;
+  /** Human ETA: "reached", "< 1 min", "~3 min", "> 30 min", or null. */
+  to_warn: string | null;
+  to_critical: string | null;
+  text: string | null;
+  r2: number | null;
+}
+
+export interface AnalysisDevice {
+  /** Backend mirror state. */
+  state: DevState;
+  /** dev_state the device itself sent. */
+  reported: DevState | null;
+  /** e.g. "Vibration 64 >= crit 60", or "recovering, was: ..." while counting down. */
+  reason: string | null;
+  /** Seconds until the state can step down one level; null when not clearing. */
+  hold_remaining_s: number | null;
+  agrees: boolean | null;
+}
+
+export interface Analysis {
+  overall: DevState;
+  alert_source: AlertSource;
+  headline: string;
+  device: AnalysisDevice;
+  ml: MlBlock;
+  forecast: Record<string, ForecastEntry>;
+  warm_start: string | null;
+}
+
+/** Per-row summary in /api/history (detail=compact). */
+export interface CompactAnalysis {
+  overall: DevState;
+  alert_source: AlertSource;
+  ml_status: MlStatus;
+  health: number | null;
+  forecast: Record<string, { seconds_to_warn: number | null; seconds_to_critical: number | null }>;
+}
+
+// ---- status (GET /api/status, WebSocket "status" messages) -------------------------------
+
+export interface Trigger {
+  sensor: string;
+  kind: "limit" | "fault";
+  level: DevState;
+  value: number | null;
+  limit: number | null;
+  direction: Direction;
+  in_band: boolean;
+  text: string;
+}
+
+export interface DeviceStatus {
+  state: DevState;
+  reason: string | null;
+  reasons: Trigger[];
+  clearing: boolean;
+  hold_remaining_s: number | null;
+  hold_seconds: number;
+  last_change: string | null;
+  device_reported: DevState | null;
+  agrees: boolean | null;
+}
+
+export interface ModelInfo {
+  status: ModelStatus;
+  message: string | null;
+  provisional: boolean;
+  sensors: string[] | null;
+  window_s: number | null;
+  created: string | null;
+}
+
+export interface RecordingStatus {
+  on: boolean;
+  file: string | null;
+  rows: number;
+  started_at: string | null;
+  label: Label | null;
+}
+
+export interface Status {
+  source: SourceType | null;
+  scenario: string | null;
+  speed: number | null;
+  file: string | null;
+  loop: boolean | null;
+  serial_port: string | null;
+  connected: boolean;
+  link: Link;
+  data_age_s: number | null;
+  last_error: string | null;
+  source_detail: Record<string, unknown>;
+  device: DeviceStatus;
+  analysis: Analysis | null;
+  model: ModelInfo;
+  warm_start: Record<string, unknown> | null;
+  analysis_timing_ms: { rows: number; avg_ms: number | null; p95_ms: number | null; max_ms: number | null };
+  recording: RecordingStatus;
+  rows_received: number;
+  rows_rejected: number;
+  history_rows: number;
+  startup_reason: string;
+  registry_warnings: string[];
+  scenarios: string[];
+}
+
+// ---- endpoints ---------------------------------------------------------------------------
+
+/** A history row: the RowDict fields plus its compact analysis. */
+export interface HistoryRow {
+  analysis?: CompactAnalysis | null;
+  [column: string]: unknown;
+}
+
+export interface HistoryResponse {
+  seconds: number;
+  count: number;
+  rows: HistoryRow[];
+}
+
+export type WsMessage =
+  | { type: "row"; mode: Mode; row: RowDict; analysis: Analysis }
+  | { type: "status"; status: Status };

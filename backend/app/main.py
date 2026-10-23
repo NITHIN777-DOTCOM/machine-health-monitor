@@ -38,7 +38,10 @@ def _build_state() -> AppState:
 
 
 def _choose_startup_source(state: AppState) -> tuple[str, str]:
-    """Serial if the port picked by resolve_port() (MHM_PORT > auto > settings) exists."""
+    """Serial if the port picked by resolve_port() (MHM_PORT > auto > settings) exists.
+    MHM_SOURCE=simulator skips the serial side entirely (no port is listed or opened)."""
+    if state.settings.force_source == "simulator":
+        return "simulator", "MHM_SOURCE=simulator; serial disabled, using simulator (normal)"
     port, how = resolve_port(state.settings)
     if port is None:
         return "simulator", "no Arduino found; using simulator (normal)"

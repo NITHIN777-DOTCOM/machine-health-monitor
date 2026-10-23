@@ -9,7 +9,7 @@ so docs and UI text must be clear to a newcomer.
   USB serial at 115200.
 - **Laptop tier** (offline, portable later: one folder, start.bat, PyInstaller .exe):
   FastAPI backend (serial/simulator/replay → device-rule mirror → ML + forecast → WebSocket)
-  → React + TypeScript dashboard (Phase 4, not built yet).
+  → React + TypeScript dashboard (`dashboard/`, Vite dev server proxies to the API).
 
 ## Repo map
 | Path | Contents |
@@ -20,7 +20,9 @@ so docs and UI text must be clear to a newcomer.
 | `backend/config/sim_profile.json` | Simulator baselines + scenarios |
 | `backend/app/` | `main.py` (API), `pipeline.py`, `analysis.py` (live ML/overall/headline), `device_rules.py`, `registry.py`, `models.py`, `recorder.py`, `state.py`, `sources/` (simulator, serial_source, replay), `ml/` (features, training, scorer, forecast, evaluation, dataset, jobs) |
 | `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `train.py`, `evaluate.py`, `run_tests.bat` |
-| `backend/tests/` | pytest suite (285 tests), `helpers.py`, `conftest.py` |
+| `backend/tests/` | pytest suite (287 tests), `helpers.py`, `conftest.py` |
+| `dashboard/` | Vite + React 19 + TS (strict) + Recharts. `src/types.ts` mirrors the backend JSON; `src/lib/` pure helpers (Vitest); `scripts/screenshots.mjs` (Playwright, project-local Chromium). See `dashboard/README.md` |
+| `docs/screenshots/phase4/` | Review screenshots (committed) |
 | `firmware/` | `README.md` (pin map, libraries, upload), `machine_monitor/` (sketch not written yet) |
 | `data/recordings/` | Real recordings (committed). `data/synthetic/` is gitignored, regenerate it |
 | `models/` | `model.joblib` + `model_meta.json` (committed, PROVISIONAL) |
@@ -36,11 +38,14 @@ venv\Scripts\python scripts\generate_synthetic.py      # 60 min normal + dev fau
 venv\Scripts\python scripts\train.py "../data/synthetic/normal_*.csv"
 venv\Scripts\python scripts\evaluate.py --dev-synthetic "../data/synthetic/devfault_*.csv"
 ```
+Dashboard (from `dashboard/`): `npm install` once, `npm run dev` (http://127.0.0.1:5173), `npm test`,
+`npm run build`, `npm run screenshots` (backend in simulator mode + dev server running).
 - Switch source: `POST /api/source {"type":"simulator","scenario":"recovery","speed":5}`. Scenarios:
   normal, sudden_fault, slow_drift, sensor_fault, recovery, drift_and_recover. Also `serial`,
   `replay {file, speed, loop}`, optional `warmstart: <recording>`.
 - **Use `127.0.0.1`, not `localhost`** (WebSocket clients hang on IPv6 `::1` on this machine).
-- With the Uno plugged in, startup picks serial. Set `MHM_PORT=COM_NONE` to force the simulator.
+- With the Uno plugged in, startup picks serial. **`MHM_SOURCE=simulator`** forces the simulator and never
+  lists/opens a serial port (switching to serial returns 400). Use it whenever someone else is using COM5.
 - Port order: `MHM_PORT` > auto-detect (VID 0x2341, then CH340/USB-SERIAL names) > settings.json.
 - Only one program may open the COM port (close the IDE Serial Monitor). Dev board: genuine Uno on COM5.
 - Bash heredocs with nested Python quotes break in this shell: write patch scripts to a file first.
@@ -89,14 +94,15 @@ venv\Scripts\python scripts\evaluate.py --dev-synthetic "../data/synthetic/devfa
 
 ## Phase status
 - Done: 1 (scaffold, contract, registry) → 2.x (backend core, sources, recorder, hysteresis, tests)
-  → 3.1 (ML engine offline) → 3.2 (live ML pipeline, warm start, model API). Latest phase commit: `92047ad`.
-- Next: **4 dashboard** (React + TS, builds itself from /api/sensors, uses the analysis block and /api/history),
-  5 extras, 6 portability (start.bat, PyInstaller, offline), 7 firmware, 8 real data + retrain + retune limits,
+  → 3.1 (ML engine offline) → 3.2 (live ML pipeline, warm start, model API) → 4 (lean dashboard,
+  `MHM_SOURCE`).
+- Next: **5 extras** (Record/Stop, Replay, scenario and source buttons in the dashboard), 6 portability (start.bat, PyInstaller, offline), 7 firmware, 8 real data + retrain + retune limits,
   9 release + docs.
 
 ## Known open items
-- Dashboard display rule for "recovering, was: …": it also appears briefly during an ongoing fault when a
-  value dips into the hysteresis band; show it quietly (e.g. with the hold countdown), not as a headline change.
+- Dashboard "recovering" rule (done in Phase 4, `dashboard/src/lib/format.ts`): the banner says "Recovering"
+  only when `hold_remaining_s <= hold_seconds - 2` (and says "rules clear ...; ML anomaly still active" if ML
+  still flags it); otherwise it strips the backend's "recovering, was:" prefix. The device card shows the hold countdown quietly.
 - Phase 7 firmware must copy `backend/app/device_rules.py` exactly (hysteresis, 5 s hold, one level at a time,
   core-sensor fault → WARNING, LCD reason text), print the contract header, and use `USE_<SENSOR>` flags.
   Until then the backend mirror may disagree with the device (`analysis.device.agrees`).

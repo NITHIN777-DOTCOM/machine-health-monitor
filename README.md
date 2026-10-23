@@ -43,7 +43,7 @@ flowchart LR
 | `backend/config/sensors.json` | **Sensor registry**: the one list of sensors every part of the system reads. |
 | `backend/tests/` | Backend tests. |
 | `backend/scripts/` | Helper scripts (recording, training, simulation). |
-| `dashboard/` | React + TypeScript dashboard. |
+| `dashboard/` | React + TypeScript dashboard (run instructions: [`dashboard/README.md`](dashboard/README.md)). |
 | `data/recordings/` | Recorded sensor data (CSV), committed to git. |
 | `data/synthetic/` | Generated training data (not in git; recreate with `backend/scripts/generate_synthetic.py`). |
 | `models/` | Trained ML model, committed to git. **Currently PROVISIONAL: trained on synthetic data only** (see [`models/README.md`](models/README.md)). |

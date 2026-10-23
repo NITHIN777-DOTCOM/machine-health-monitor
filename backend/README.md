@@ -122,6 +122,27 @@ export MHM_PORT=/dev/ttyACM0 (macOS/Linux)
 Use it to force a specific board (e.g. two Arduinos plugged in). Unset it to go back to
 auto-detection.
 
+## Simulator only: `MHM_SOURCE=simulator`
+
+Set `MHM_SOURCE=simulator` to work on the software while another program (the Arduino IDE,
+a hardware test script) is using the Uno's COM port. The backend then:
+
+- starts on the simulator (`normal`) and **never lists or opens a serial port**, even with
+  the Uno plugged in or `MHM_PORT` set;
+- refuses `POST /api/source {"type": "serial"}` with HTTP 400. Simulator and replay
+  switches work as usual.
+
+```
+set MHM_SOURCE=simulator            (Windows cmd)
+$env:MHM_SOURCE = "simulator"       (PowerShell)
+export MHM_SOURCE=simulator         (macOS/Linux)
+```
+
+`simulator` is the only supported value; anything else is ignored with a warning in the
+log. `/api/status` → `startup_reason` says when it is active. Unset it and restart the
+backend to use the Arduino again. (The older trick `MHM_PORT=COM_NONE` also starts the
+simulator, but it still lists the ports and lets a later switch to serial open one.)
+
 ## API summary
 
 | Method | Path | Purpose |
@@ -243,7 +264,7 @@ checks it against the code, so the docs and the state machine can't drift apart.
 | File | Role |
 |------|------|
 | `app/main.py` | FastAPI app, endpoints, startup source choice. |
-| `app/config.py` | Paths, `settings.json`, `MHM_PORT`. |
+| `app/config.py` | Paths, `settings.json`, `MHM_PORT`, `MHM_SOURCE`. |
 | `app/registry.py` | Loads `sensors.json`; enabled / ML sensors, limits, group rule. |
 | `app/models.py` | `SensorRow`, `parse_line()`, CSV helpers. |
 | `app/device_rules.py` | `DeviceStateMachine`: `dev_state` with immediate escalation, hysteresis + `hold_seconds` de-escalation (same as the firmware). Used by the simulator and mirrored in the pipeline. |

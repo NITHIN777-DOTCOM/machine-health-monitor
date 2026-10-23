@@ -199,3 +199,14 @@ def test_load_settings_reads_mhm_port(tmp_path, monkeypatch):
     monkeypatch.delenv("MHM_PORT")
     assert load_settings(path).env_port is None
     assert load_settings(tmp_path / "missing.json").hold_seconds == 5
+
+
+def test_mhm_source_env(monkeypatch, tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("MHM_SOURCE", raising=False)
+    assert load_settings(path).force_source is None
+    monkeypatch.setenv("MHM_SOURCE", " Simulator ")
+    assert load_settings(path).force_source == "simulator"
+    monkeypatch.setenv("MHM_SOURCE", "serial")          # unsupported: ignored with a warning
+    assert load_settings(path).force_source is None

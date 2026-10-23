@@ -3,6 +3,9 @@
 Settings come from backend/config/settings.json, plus environment variables:
     MHM_PORT   serial port to use (e.g. COM5); overrides auto-detection.
                Port priority: MHM_PORT > auto-detect > settings.json "serial_port".
+    MHM_SOURCE "simulator": start on the simulator and never open (or even list) a serial
+               port; POST /api/source {"type": "serial"} is refused. For working on the
+               software while another program uses the Arduino's COM port.
     MHM_ROOT   project root folder (the one containing backend/, data/, models/)
 """
 from __future__ import annotations
@@ -23,12 +26,14 @@ SIM_PROFILE_PATH = CONFIG_DIR / "sim_profile.json"
 SETTINGS_PATH = CONFIG_DIR / "settings.json"
 RECORDINGS_DIR = ROOT_DIR / "data" / "recordings"
 MODELS_DIR = ROOT_DIR / "models"
+FORCEABLE_SOURCES = ("simulator",)   # values MHM_SOURCE accepts
 
 
 @dataclass
 class Settings:
     serial_port: str | None = None   # from settings.json; last resort after auto-detect
     env_port: str | None = None      # from MHM_PORT; overrides auto-detect
+    force_source: str | None = None  # from MHM_SOURCE; "simulator" = serial disabled
     baud: int = 115200
     serial_boot_wait_s: float = 2.0
     reconnect_interval_s: float = 2.0
@@ -56,7 +61,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         for key, value in data.items():
-            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "env_port"):
+            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "env_port", "force_source"):
                 setattr(settings, key, value)
             else:
                 log.warning("settings.json: unknown key %r ignored", key)
@@ -66,4 +71,9 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
         log.error("Could not read %s (%s), using default settings", path, exc)
 
     settings.env_port = os.environ.get("MHM_PORT", "").strip() or None
+    forced = os.environ.get("MHM_SOURCE", "").strip().lower() or None
+    if forced not in (None, *FORCEABLE_SOURCES):
+        log.warning("MHM_SOURCE=%r ignored; the only supported value is 'simulator'", forced)
+        forced = None
+    settings.force_source = forced
     return settings

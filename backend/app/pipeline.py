@@ -58,6 +58,8 @@ class Pipeline:
             return SimulatorSource(**common, scenario=scenario or "normal", speed=speed, profile=self.sim_profile,
                                    hold_seconds=st.settings.hold_seconds)
         if type == "serial":
+            if st.settings.force_source == "simulator":
+                raise ValueError("serial is disabled by MHM_SOURCE=simulator (unset it and restart to use the Arduino)")
             return SerialSource(**common, settings=st.settings, label_getter=self.live_label)
         if type == "replay":
             if not file:
