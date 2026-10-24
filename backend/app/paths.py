@@ -17,6 +17,7 @@ Two kinds of files:
   demo recordings    data/demo/                      data/demo/
   logs               logs/                           logs/
   dashboard (r/o)    dashboard/dist/                 _internal/dashboard/dist/
+  evaluation (r/o)   docs/eval/eval_real_session_02  _internal/docs/eval/...
   =================  ==============================  ===============================
 
 On the first frozen run, ensure_app_dirs() copies the default config and model next to the
@@ -47,6 +48,8 @@ DEFAULT_CONFIG_DIR = BUNDLE_DIR / "backend" / "config"
 DEFAULT_MODELS_DIR = BUNDLE_DIR / "models"
 DASHBOARD_DIR = BUNDLE_DIR / "dashboard" / "dist"
 VERSION_FILE = BUNDLE_DIR / "version.json"     # written by the build; absent in development
+# Held-out test evaluation of the shipped model (Phase 8.2), shown in the dashboard's Model panel.
+EVALUATION_FILE = BUNDLE_DIR / "docs" / "eval" / "eval_real_session_02.json"
 
 # ---- writable --------------------------------------------------------------------------
 CONFIG_DIR = APP_DIR / "config" if FROZEN else APP_DIR / "backend" / "config"

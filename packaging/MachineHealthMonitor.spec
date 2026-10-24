@@ -10,6 +10,7 @@
 #   dashboard/dist/   the built dashboard (npm run build)
 #   backend/config/   default settings.json, sensors.json, sim_profile.json
 #   models/           the shipped model + meta
+#   docs/eval/eval_real_session_02.json   its held-out evaluation (Model panel)
 #   version.json      written by `packaging/build_release.py version`
 import os
 from PyInstaller.utils.hooks import collect_submodules
@@ -32,6 +33,7 @@ datas = [
     (os.path.join(BACKEND, "config", "sim_profile.json"), "backend/config"),
     (os.path.join(REPO, "models", "model.joblib"), "models"),
     (os.path.join(REPO, "models", "model_meta.json"), "models"),
+    (os.path.join(REPO, "docs", "eval", "eval_real_session_02.json"), "docs/eval"),
     (need(VERSION_JSON), "."),
 ]
 

@@ -2,7 +2,9 @@
 // and when FastAPI serves the dashboard itself (Phase 6).
 
 import { apiErrorText, type SourceBody } from "./lib/controls";
-import type { HistoryResponse, Label, Recording, Registry, Status } from "./types";
+import type {
+  EvaluationResponse, HistoryResponse, Label, ModelDetails, Recording, Registry, Status,
+} from "./types";
 
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path, { cache: "no-store" });
@@ -49,3 +51,6 @@ export const warmStart = (file: string) => postJson<{ message: string }>("/api/w
 export function streamUrl(loc: Pick<Location, "protocol" | "host"> = window.location): string {
   return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/ws/stream`;
 }
+
+export const fetchModel = () => getJson<ModelDetails>("/api/model");
+export const fetchEvaluation = () => getJson<EvaluationResponse>("/api/model/evaluation");

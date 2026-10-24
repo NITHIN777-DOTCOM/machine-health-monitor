@@ -6,6 +6,7 @@ starts a new one without restarting the server.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any
@@ -223,7 +224,29 @@ class Pipeline:
             "sklearn_version": m.get("sklearn_version"),
             "provisional_reason": m.get("provisional_reason"),
             "ml_thresholds": self.ml_thresholds(),
+            "feature_names": m.get("feature_names"),
+            "sessions": (m.get("trained_on") or {}).get("sessions"),
+            "candidate": m.get("candidate"),
+            "selection": m.get("selection"),
         }
+
+    def evaluation(self) -> dict:
+        """The held-out test evaluation (docs/eval/eval_real_session_02.json), and whether it
+        belongs to the loaded model (a retrained model has not been evaluated)."""
+        path = self.state.settings.evaluation_file
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {"available": False, "message": "No evaluation yet: run scripts/evaluate.py on a held-out "
+                                                    "test recording (see docs/eval/README.md)."}
+        except (OSError, ValueError) as exc:
+            return {"available": False, "message": f"Could not read the evaluation file: {exc}"}
+        evaluated = (data.get("model") or {}).get("created")
+        loaded = self.scorer.meta.get("created")
+        same = evaluated is not None and evaluated == loaded
+        note = None if same else (f"This evaluation is for the model created {evaluated}; the loaded model "
+                                  f"({loaded or 'none'}) has not been evaluated on held-out data.")
+        return {"available": True, "matches_model": same, "message": note, **data}
 
     # ---- status ------------------------------------------------------------------------
     def link(self) -> dict[str, Any]:

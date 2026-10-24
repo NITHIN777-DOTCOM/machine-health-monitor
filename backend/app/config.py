@@ -57,6 +57,7 @@ class Settings:
     recordings_dir: Path = field(default=RECORDINGS_DIR)
     models_dir: Path = field(default=MODELS_DIR)
     demo_dir: Path | None = None     # read-only demo recordings (data/demo), listed after recordings_dir
+    evaluation_file: Path = field(default=paths.EVALUATION_FILE)   # GET /api/model/evaluation
 
     @property
     def recording_dirs(self) -> list[Path]:
@@ -75,7 +76,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         for key, value in data.items():
-            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "demo_dir", "env_port", "force_source"):
+            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "demo_dir", "evaluation_file", "env_port", "force_source"):
                 setattr(settings, key, value)
             else:
                 log.warning("settings.json: unknown key %r ignored", key)

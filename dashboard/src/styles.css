@@ -386,6 +386,36 @@ main.stale { filter: grayscale(1); opacity: 0.55; }
 .progress-bar { height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
 
+/* ---- model panel ------------------------------------------------------------------------ */
+.drawer-wide { width: 460px; }
+.model-status { margin: 0; font-weight: 600; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s3); margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.inline-note { display: flex; align-items: flex-start; gap: var(--s2); margin: 0; }
+.inline-note .icon { margin-top: 2px; flex: none; }
+.stamp {
+  align-self: flex-start; margin: 0; padding: 2px var(--s2); font-weight: 600; letter-spacing: 0.02em;
+  border: 1px solid var(--border-strong); border-radius: 4px;
+}
+.ctl h3.sub { margin-top: var(--s2); }
+.eval-table { width: 100%; border-collapse: collapse; }
+.eval-table th, .eval-table td { padding: var(--s1) var(--s2) var(--s1) 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.eval-table thead th { font-size: var(--t-xs); font-weight: 600; color: var(--muted); }
+.eval-table tbody th { font-weight: 400; }
+.eval-table td .xs { display: block; }
+.nowrap { white-space: nowrap; }
+.tag { margin-left: var(--s1); padding: 0 4px; font-size: var(--t-xs); color: var(--muted); border: 1px solid var(--border); border-radius: 3px; }
+.verdict { margin: 0; padding: var(--s2) var(--s3); background: var(--surface-2); border-left: 4px solid var(--st-ml); border-radius: 4px; }
+.eval-chart .chart-box { height: 200px; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); list-style: none; margin: var(--s1) 0 0; padding: 0; }
+.legend li { display: inline-flex; align-items: center; gap: var(--s1); }
+.key { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--accent); }
+.key-dash { border-top: 2px dashed var(--st-ml); }
+.key-ml { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--st-ml); }
+.key-rules { width: 0; height: 0; border-top: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--st-warning); }
+.key-fault { width: 14px; height: 10px; border: 0; background: var(--grid); }
+
 /* ---- footer ----------------------------------------------------------------------------- */
 .footer {
   display: flex;
@@ -402,6 +432,7 @@ main.stale { filter: grayscale(1); opacity: 0.55; }
   .cards-row { grid-template-columns: 1fr 1fr; }
   /* Narrow screens: the drawer overlays the page instead of squeezing it. */
   .controls { position: fixed; right: 0; top: 0; bottom: 0; max-height: none; z-index: 10; box-shadow: -2px 0 8px rgb(0 0 0 / 0.15); }
+  .drawer-wide { width: min(460px, 100vw); }
 }
 @media (max-width: 720px) {
   .cards-row { grid-template-columns: 1fr; }

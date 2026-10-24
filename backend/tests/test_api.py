@@ -288,3 +288,30 @@ def test_mirror_resets_when_the_device_clock_restarts(client):
         r.dev_state = "NORMAL"
         a = pipeline.process(r)
     assert pipeline.device.state == "NORMAL" and a["device"]["agrees"] is True
+
+
+# ---- model panel (Phase 8.2) ------------------------------------------------------------
+
+def test_model_evaluation_matches_the_shipped_model(client):
+    ev = client.get("/api/model/evaluation").json()
+    assert ev["available"] is True and ev["matches_model"] is True and ev["message"] is None
+    assert ev["stamp"] == "REAL DATA - held-out test session"
+    assert set(ev["label_sets"]) == {"cleaned", "live"} and ev["subtle"]["answer"] in ("yes", "partly", "no")
+    assert ev["chart"]["rows"] and ev["chart"]["sensor"] == "vib_count"
+    info = client.get("/api/model").json()
+    assert info["sessions"] == ["real_session_01_20261024.csv"] and len(info["feature_names"]) == 16
+    model = client.get("/api/status").json()["model"]
+    assert model["provisional"] is False and model["status_line"].startswith("bench-trained")
+    assert "needs its own normal data" in model["deployment_note"]
+
+
+def test_model_evaluation_missing_or_for_another_model(client, tmp_path):
+    settings = main.app.state.mhm.settings
+    settings.evaluation_file = tmp_path / "none.json"
+    ev = client.get("/api/model/evaluation").json()
+    assert ev == {"available": False, "message": ev["message"]} and "No evaluation yet" in ev["message"]
+    other = tmp_path / "other.json"
+    other.write_text('{"model": {"created": "2020-01-01T00:00:00"}, "label_sets": {}}', encoding="utf-8")
+    settings.evaluation_file = other
+    ev = client.get("/api/model/evaluation").json()
+    assert ev["available"] is True and ev["matches_model"] is False and "has not been evaluated" in ev["message"]

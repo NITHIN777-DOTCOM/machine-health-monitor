@@ -10,7 +10,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "screenshots:install": "node scripts/install-browser.mjs",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "screenshots:model": "node scripts/screenshots-model.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

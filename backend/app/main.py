@@ -209,6 +209,12 @@ async def get_model():
     return _pipeline().model_info()
 
 
+@app.get("/api/model/evaluation")
+async def get_model_evaluation():
+    """Held-out test results of the model (rules vs ML), or {"available": false, "message": ...}."""
+    return _pipeline().evaluation()
+
+
 @app.post("/api/model/reload")
 async def reload_model():
     return await _pipeline().reload_model()

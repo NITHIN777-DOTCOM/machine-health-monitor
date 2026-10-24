@@ -176,7 +176,96 @@ export interface ModelInfo {
   sensors: string[] | null;
   window_s: number | null;
   created: string | null;
+  /** One plain line, e.g. "bench-trained on real data (session 01)" (model_meta.json "status"). */
+  status_line?: string | null;
+  deployment_note?: string | null;
 }
+
+/** GET /api/model: ModelInfo plus training details. */
+export interface ModelDetails extends ModelInfo {
+  trained_on: { real: number; synthetic: number } | null;
+  training_windows: number | null;
+  feature_names: string[] | null;
+  sessions: string[] | null;
+  candidate: string | null;
+}
+
+// ---- held-out evaluation (GET /api/model/evaluation, docs/eval/eval_real_session_02.json) ----
+
+export interface DetectorResult {
+  rows: number;
+  episodes: number;
+  /** Seconds from the fault's first row to the first flag; null = missed. */
+  delay_s: number | null;
+}
+
+export interface FaultResult {
+  kind: string;
+  name: string;
+  subtle: boolean;
+  sensors: string[];
+  /** False: the fault is on a rule-only sensor (leak, safety zone), not an ML miss. */
+  ml_sensor: boolean;
+  rows: number;
+  episodes?: number;
+  rules?: DetectorResult;
+  /** null when ml_sensor is false. */
+  ml?: DetectorResult | null;
+  first?: "rules" | "ml" | "same" | null;
+  rules_missed?: number;
+  ml_on_rules_missed?: number;
+}
+
+export interface FalseAlarmGroup {
+  name: string;
+  rows: number;
+  rows_excl_margin: number;
+  rules: number;
+  rules_excl_margin: number;
+  ml: number;
+  ml_excl_margin: number;
+}
+
+export interface LabelSetResult {
+  faults: FaultResult[];
+  false_alarms: Record<string, FalseAlarmGroup>;
+  totals: Record<string, number>;
+}
+
+export interface EvalChartRow {
+  t: number;
+  ts: string;
+  value: number | null;
+  health: number | null;
+  rules: boolean;
+  ml: boolean;
+  label: string;
+}
+
+export interface Evaluation {
+  available: true;
+  matches_model: boolean;
+  message: string | null;
+  stamp: string;
+  created: string;
+  session: string;
+  rows: number;
+  margin_s: number;
+  model: {
+    status: string | null;
+    created: string | null;
+    trained_on: { real_rows: number; synthetic_rows: number; sessions: string[] };
+    sensors: string[] | null;
+    feature_count: number;
+  };
+  label_sets: Record<string, LabelSetResult>;
+  subtle: { answer: "yes" | "partly" | "no" };
+  subtle_text: string;
+  forecast: { available: boolean; lead_s?: number | null; forecast_warn_rows_elsewhere?: number; rows_elsewhere?: number };
+  chart: { kind: string; name: string; sensor: string; rows: EvalChartRow[] };
+}
+
+export type EvaluationResponse = Evaluation | { available: false; message: string };
 
 export interface RecordingStatus {
   on: boolean;

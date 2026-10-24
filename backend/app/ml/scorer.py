@@ -239,4 +239,6 @@ class Scorer:
             "sensors": self.meta.get("sensors"),
             "window_s": self.meta.get("window_s"),
             "created": self.meta.get("created"),
+            "status_line": self.meta.get("status"),
+            "deployment_note": self.meta.get("deployment_note"),
         }

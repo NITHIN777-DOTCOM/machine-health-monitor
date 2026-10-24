@@ -17,7 +17,7 @@ export function Footer({ status }: { status: Status | null }) {
       <span>Rows received: {status.rows_received} · rejected: {status.rows_rejected}</span>
       <span>
         Model: {model.status === "READY" ? `created ${formatDate(model.created)}` : model.status}
-        {model.provisional && " (provisional)"}
+        {model.provisional ? " (provisional)" : model.status_line ? ` (${model.status_line})` : ""}
       </span>
       {status.version && <span>Version: {versionText(status.version)}</span>}
       {status.registry_warnings.length > 0 && (

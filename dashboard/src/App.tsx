@@ -5,6 +5,7 @@ import { Footer } from "./components/Footer";
 import { ForecastPanel } from "./components/ForecastPanel";
 import { Icon } from "./components/Icon";
 import { MlCard } from "./components/MlCard";
+import { ModelPanel } from "./components/ModelPanel";
 import { RecIndicator } from "./components/RecIndicator";
 import { SensorCards } from "./components/SensorCards";
 import { StatusBanner } from "./components/StatusBanner";
@@ -39,7 +40,9 @@ function connectionNotice(d: DashboardData): string | null {
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const d = useDashboard();
-  const [controlsOpen, setControlsOpen] = useState(false);
+  // One drawer at a time: Controls or Model.
+  const [drawer, setDrawer] = useState<"controls" | "model" | null>(null);
+  const toggle = (which: "controls" | "model") => setDrawer((open) => (open === which ? null : which));
   const link = linkView(d.ws, d.status?.link);
   const mode = modeView(d.row?.mode, d.status?.source);
   const sensors = useMemo(() => enabledSensors(d.registry), [d.registry]);
@@ -55,8 +58,12 @@ export default function App() {
     <div className="app">
       <TopBar mode={mode} link={link} theme={theme} onToggleTheme={toggleTheme}>
         <RecIndicator rec={d.status?.recording} />
-        <button type="button" className="btn" aria-pressed={controlsOpen} aria-expanded={controlsOpen}
-          onClick={() => setControlsOpen((o) => !o)} data-testid="controls-toggle">
+        <button type="button" className="btn" aria-pressed={drawer === "model"} aria-expanded={drawer === "model"}
+          onClick={() => toggle("model")} data-testid="model-toggle">
+          <Icon name="spark" /> Model
+        </button>
+        <button type="button" className="btn" aria-pressed={drawer === "controls"} aria-expanded={drawer === "controls"}
+          onClick={() => toggle("controls")} data-testid="controls-toggle">
           <Icon name="settings" /> Controls
         </button>
       </TopBar>
@@ -71,13 +78,14 @@ export default function App() {
         <StatusBanner analysis={d.analysis} holdSeconds={holdSeconds} />
         <div className="cards-row">
           <DeviceCard device={d.analysis?.device ?? null} holdSeconds={holdSeconds} />
-          <MlCard ml={d.analysis?.ml ?? null} registry={d.registry} levels={levels} />
+          <MlCard ml={d.analysis?.ml ?? null} registry={d.registry} levels={levels} model={d.status?.model ?? null} />
           <ForecastPanel analysis={d.analysis} registry={d.registry} />
         </div>
         <SensorCards registry={d.registry} row={d.row} />
         <TrendCharts sensors={sensors} points={d.points} healthLines={healthLines} />
       </main>
-      {controlsOpen && <ControlsPanel status={d.status} onClose={() => setControlsOpen(false)} />}
+      {drawer === "controls" && <ControlsPanel status={d.status} onClose={() => setDrawer(null)} />}
+      {drawer === "model" && <ModelPanel status={d.status} registry={d.registry} onClose={() => setDrawer(null)} />}
       </div>
       <Footer status={d.status} />
     </div>

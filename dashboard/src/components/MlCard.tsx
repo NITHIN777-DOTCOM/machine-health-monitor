@@ -1,5 +1,6 @@
 import { causeText, causeTooltip, healthLabel, healthTone, mlView, visibleCauses, type HealthLevels } from "../lib/format";
-import type { MlBlock, Registry } from "../types";
+import { modelTag } from "../lib/model";
+import type { MlBlock, ModelInfo, Registry } from "../types";
 import { Icon } from "./Icon";
 
 /** The ML opinion: advisory only (it can raise the overall status to WARNING, never CRITICAL). */
@@ -7,9 +8,12 @@ interface Props {
   ml: MlBlock | null;
   registry: Registry | null;
   levels: HealthLevels;
+  /** status.model: what the model was trained on (the tag next to the title). */
+  model: ModelInfo | null;
 }
 
-export function MlCard({ ml, registry, levels }: Props) {
+export function MlCard({ ml, registry, levels, model }: Props) {
+  const tag = modelTag(model);
   const view = mlView(ml);
   const health = ml?.health ?? null;
   const tone = healthTone(health, levels);
@@ -22,9 +26,9 @@ export function MlCard({ ml, registry, levels }: Props) {
     <section className="card" aria-labelledby="ml-title" data-ml-status={ml?.status ?? "NONE"}>
       <div className="card-head">
         <h2 id="ml-title">ML anomaly detection</h2>
-        {ml?.provisional && (
-          <span className="provisional" title="The model was trained on simulated data only; it must be retrained on real recordings">
-            provisional model
+        {tag && (
+          <span className="provisional" title={tag.title} data-testid="model-tag">
+            {tag.text}
           </span>
         )}
       </div>
