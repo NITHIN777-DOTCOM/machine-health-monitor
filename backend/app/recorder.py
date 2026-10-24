@@ -10,7 +10,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, Sequence
 
 from .models import LABELS, TS_COLUMN, SensorRow, csv_header
 from .registry import TIME_COLUMN, Registry
@@ -90,28 +90,38 @@ class Recorder:
         }
 
 
-def list_recordings(recordings_dir: Path) -> list[dict[str, Any]]:
-    """Name, size, row count, duration and last-modified time of every CSV in recordings_dir
-    (newest first)."""
-    out = []
-    for path in sorted(recordings_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
-        st = path.stat()
-        info: dict[str, Any] = {"file": path.name, "size_bytes": st.st_size, "rows": 0, "duration_s": None,
-                                "modified": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
-                                "error": None}
-        try:
-            with path.open(newline="", encoding="utf-8") as f:
-                first = last = None
-                for record in csv.DictReader(line for line in f if not line.startswith("#")):
-                    first = first or record
-                    last = record
-                    info["rows"] += 1
-            if first and last:
-                info["duration_s"] = _duration(first, last)
-        except (OSError, csv.Error, UnicodeDecodeError) as exc:
-            info["error"] = str(exc)
-        out.append(info)
+def list_recordings(recordings_dir: Path | Sequence[Path]) -> list[dict[str, Any]]:
+    """Name, folder, size, row count, duration and last-modified time of every CSV in
+    recordings_dir (newest first). With several folders (data/recordings, data/demo) each
+    folder's files follow the previous folder's; a name already listed is skipped, matching
+    resolve_recording()."""
+    dirs = [recordings_dir] if isinstance(recordings_dir, Path) else list(recordings_dir)
+    out: list[dict[str, Any]] = []
+    for d in dirs:
+        seen = {r["file"] for r in out}
+        files = [p for p in d.glob("*.csv") if p.name not in seen]
+        out += [_describe(p) for p in sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)]
     return out
+
+
+def _describe(path: Path) -> dict[str, Any]:
+    st = path.stat()
+    info: dict[str, Any] = {"file": path.name, "folder": path.parent.name, "size_bytes": st.st_size,
+                            "rows": 0, "duration_s": None,
+                            "modified": datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"),
+                            "error": None}
+    try:
+        with path.open(newline="", encoding="utf-8") as f:
+            first = last = None
+            for record in csv.DictReader(line for line in f if not line.startswith("#")):
+                first = first or record
+                last = record
+                info["rows"] += 1
+        if first and last:
+            info["duration_s"] = _duration(first, last)
+    except (OSError, csv.Error, UnicodeDecodeError) as exc:
+        info["error"] = str(exc)
+    return info
 
 
 def _duration(first: dict[str, str], last: dict[str, str]) -> float | None:

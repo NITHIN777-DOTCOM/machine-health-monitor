@@ -192,16 +192,26 @@ class Scorer:
         return worst
 
     def causes(self, features: Mapping[str, float], top: int = 2) -> list[dict[str, Any]]:
-        """The `top` sensors whose features are furthest from normal (largest |z|)."""
+        """The `top` sensors whose features are furthest from normal (largest |z|).
+
+        Per sensor, a level feature (mean/last/min/max) that is itself unusual (|z| >= 2)
+        wins over a larger std or slope z: "Vibration: far above normal" says more to a
+        newcomer than "Vibration: very unstable" for the same fault."""
         stats = self.meta["normal_stats"]
         best: dict[str, tuple[float, str]] = {}
+        best_level: dict[str, tuple[float, str]] = {}
         for name, value in features.items():
             st = stats.get(name)
             if st is None:
                 continue
             z = float(np.clip((value - st["mean"]) / st["std"], -Z_CAP, Z_CAP))
-            key, _ = split_feature(name)
+            key, stat = split_feature(name)
             if key not in best or abs(z) > abs(best[key][0]):
+                best[key] = (z, name)
+            if stat not in ("std", "slope") and (key not in best_level or abs(z) > abs(best_level[key][0])):
+                best_level[key] = (z, name)
+        for key, (z, name) in best_level.items():
+            if z_band(z) != "normal":
                 best[key] = (z, name)
         ranked = sorted(best.items(), key=lambda kv: -abs(kv[1][0]))[:top]
         out = []

@@ -4,7 +4,7 @@
 
 import type {
   AlertSource, AnalysisDevice, DevState, Direction, ForecastEntry, Link, MlBlock, MlCause, Mode,
-  Sensor, SourceType,
+  Sensor, SourceType, VersionInfo,
 } from "../types";
 
 /** Icon names drawn by components/Icon.tsx. */
@@ -223,6 +223,15 @@ export function causeText(cause: MlCause, displayName?: string): string {
   return `${name}: ${causeWords(cause.feature, cause.z)}`;
 }
 
+/** The causes worth listing, at most 2 with |z| >= 2. Empty while ML is calm (not ANOMALY and
+ *  health above the clear level), so a normal screen says "Nothing unusual" instead of
+ *  "slightly high" noise. */
+export function visibleCauses(ml: MlBlock | null | undefined, levels: HealthLevels = DEFAULT_HEALTH_LEVELS): MlCause[] {
+  if (!ml || ml.health == null) return [];
+  if (ml.status !== "ANOMALY" && ml.health > levels.clear_health) return [];
+  return ml.causes.filter((c) => Math.abs(c.z) >= 2).slice(0, 2);
+}
+
 /** Above this |z| the exact number means little (and the backend caps it at 99). */
 export const Z_TOOLTIP_MAX = 10;
 
@@ -366,4 +375,11 @@ export function formatDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Footer version: "v0.6.0 · v0.6.0-0-gabc1234 · built 2026-10-24" (dev: "v0.6.0 · abc1234-dirty · dev"). */
+export function versionText(v: VersionInfo | null | undefined): string | null {
+  if (!v) return null;
+  return [`v${v.version}`, v.git, v.build_date ? `built ${v.build_date}` : v.frozen ? null : "dev"]
+    .filter(Boolean).join(" · ");
 }

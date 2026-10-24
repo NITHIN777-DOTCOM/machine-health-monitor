@@ -1,4 +1,4 @@
-import { formatDate } from "../lib/format";
+import { formatDate, versionText } from "../lib/format";
 import type { Status } from "../types";
 
 export function Footer({ status }: { status: Status | null }) {
@@ -19,6 +19,7 @@ export function Footer({ status }: { status: Status | null }) {
         Model: {model.status === "READY" ? `created ${formatDate(model.created)}` : model.status}
         {model.provisional && " (provisional)"}
       </span>
+      {status.version && <span>Version: {versionText(status.version)}</span>}
       {status.registry_warnings.length > 0 && (
         <span className="text-warning">Registry warnings: {status.registry_warnings.join("; ")}</span>
       )}

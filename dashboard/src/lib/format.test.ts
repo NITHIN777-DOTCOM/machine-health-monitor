@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AnalysisDevice, ForecastEntry, MlBlock } from "../types";
 import {
   alertSourceLabel, bannerText, causeText, causeTooltip, causeWords, confidence, forecastDetail, forecastText,
-  forecastTone, formatValue, healthLabel, healthTone, shortName, zBand,
+  forecastTone, formatValue, healthLabel, healthTone, shortName, versionText, visibleCauses, zBand,
   isRecovering, limitsText, linkView, mlView, modeView, sensorLevel, stateView, stripRecovering,
 } from "./format";
 
@@ -262,5 +262,36 @@ describe("forecast confidence", () => {
     const f = fc({ status: "no_data", trend: null, r2: null });
     expect(forecastText("Temperature", f)).toBe("Temperature: no data");
     expect(forecastTone(f)).toBe("neutral");
+  });
+});
+
+describe("visibleCauses", () => {
+  const c = (feature: string, z: number) => ({
+    sensor: feature.split("__")[0] ?? feature, feature, z, direction: "high", band: zBand(z), text: "",
+  });
+  const causes = [c("temp_c__mean", 2.4), c("humidity__std", 1.2)];
+  const levels = { anomaly_health: 50, clear_health: 60 };
+
+  it("hides slight causes while ML is OK and healthy (calm normal screen)", () => {
+    expect(visibleCauses(ml({ status: "OK", health: 85, causes }), levels)).toEqual([]);
+  });
+  it("shows them during an anomaly or when health is at/below the clear level", () => {
+    expect(visibleCauses(ml({ status: "ANOMALY", health: 70, causes }), levels).map((x) => x.feature)).toEqual(["temp_c__mean"]);
+    expect(visibleCauses(ml({ status: "OK", health: 55, causes }), levels)).toHaveLength(1);
+  });
+  it("never lists normal features or more than two, and nothing without a score", () => {
+    const many = [c("a__mean", 9), c("b__mean", -7), c("d__max", 3)];
+    expect(visibleCauses(ml({ status: "ANOMALY", health: 10, causes: many }), levels)).toHaveLength(2);
+    expect(visibleCauses(ml({ status: "WARMING_UP", health: null, causes: many }), levels)).toEqual([]);
+    expect(visibleCauses(null, levels)).toEqual([]);
+  });
+});
+
+describe("versionText", () => {
+  const v = { app: "machine-health-monitor", name: "x", version: "0.6.0", git: "v0.6.0-0-gabc1234", build_date: "2026-10-24", frozen: true };
+  it("shows version, git and build date", () => {
+    expect(versionText(v)).toBe("v0.6.0 · v0.6.0-0-gabc1234 · built 2026-10-24");
+    expect(versionText({ ...v, git: "abc1234-dirty", build_date: null, frozen: false })).toBe("v0.6.0 · abc1234-dirty · dev");
+    expect(versionText(undefined)).toBeNull();
   });
 });

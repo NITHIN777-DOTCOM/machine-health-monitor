@@ -1,6 +1,7 @@
-"""FastAPI app: REST API + WebSocket stream.
+"""FastAPI app: REST API + WebSocket stream, and the built dashboard at "/".
 
 Run from backend/:  uvicorn app.main:app --reload
+The portable exe starts it through app/launcher.py.
 """
 from __future__ import annotations
 
@@ -10,7 +11,10 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
+
+from . import paths
 
 from .analysis import compact
 from .config import load_settings
@@ -27,6 +31,7 @@ log = logging.getLogger("mhm")
 
 
 def _build_state() -> AppState:
+    paths.ensure_app_dirs()
     settings = load_settings()
     registry = Registry.load()
     return AppState(
@@ -63,7 +68,7 @@ async def lifespan(app: FastAPI):
     warm = state.settings.warmstart_file
     if warm:
         try:
-            resolve_recording(state.settings.recordings_dir, warm)
+            resolve_recording(state.settings.recording_dirs, warm)
         except FileNotFoundError as exc:
             log.warning("warmstart_file %r not used: %s", warm, exc)
             warm = None
@@ -146,7 +151,7 @@ async def set_source(req: SourceRequest):
     pipeline = _pipeline()
     try:
         if req.warmstart:
-            resolve_recording(_state().settings.recordings_dir, req.warmstart)   # 404 before switching
+            resolve_recording(_state().settings.recording_dirs, req.warmstart)   # 404 before switching
         source = pipeline.make_source(req.type, scenario=req.scenario, speed=req.speed, file=req.file, loop=req.loop)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
@@ -182,7 +187,7 @@ async def set_label(req: LabelRequest):
 
 @app.get("/api/recordings")
 async def get_recordings():
-    return {"recordings": list_recordings(_state().settings.recordings_dir)}
+    return {"recordings": list_recordings(_state().settings.recording_dirs)}
 
 
 @app.post("/api/warmstart")
@@ -244,3 +249,29 @@ async def ws_stream(ws: WebSocket):
         pass
     finally:
         broadcaster.clients.discard(ws)
+
+
+# ---- the dashboard (dashboard/dist, built with `npm run build`) ------------------------
+# Registered last, so every /api and /ws route above wins. Any other path serves a file
+# from dist, or index.html (single-page app fallback). In development the Vite dev server
+# (http://127.0.0.1:5173) still works as before and proxies to the API.
+
+NOT_BUILT = ("The dashboard is not built. Run `npm run build` in dashboard/, or use the Vite dev "
+             "server: `npm run dev` in dashboard/, then open http://127.0.0.1:5173")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+async def dashboard(path: str):
+    if path.split("/", 1)[0] in ("api", "ws"):
+        raise HTTPException(404, f"no endpoint /{path}")
+    dist = paths.DASHBOARD_DIR.resolve()
+    index = dist / "index.html"
+    if not index.is_file():
+        return PlainTextResponse(NOT_BUILT, status_code=503)
+    target = (dist / path).resolve()
+    if path and target.is_file() and target.is_relative_to(dist):
+        return FileResponse(target)
+    if "." in path.rsplit("/", 1)[-1]:          # a missing file (e.g. an old asset name): 404, not the page
+        raise HTTPException(404, f"no file /{path}")
+    # index.html must not be cached: after an update the browser fetches the new asset names.
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})

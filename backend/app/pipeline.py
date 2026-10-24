@@ -18,6 +18,7 @@ from .ml.scorer import Scorer
 from .models import SensorRow
 from .sources import ReplaySource, SerialSource, SimulatorSource, Source
 from .sources.replay import resolve_recording
+from .version import version_info
 from .sources.serial_source import port_exists, resolve_port
 from .sources.simulator import load_profile
 from .state import AppState
@@ -70,7 +71,7 @@ class Pipeline:
         if type == "replay":
             if not file:
                 raise ValueError("replay needs 'file' (a name from GET /api/recordings)")
-            path = resolve_recording(st.settings.recordings_dir, file)
+            path = resolve_recording(st.settings.recording_dirs, file)
             return ReplaySource(**common, path=path, speed=speed, loop=loop)
         raise ValueError(f"unknown source type {type!r}; use simulator, serial or replay")
 
@@ -160,7 +161,7 @@ class Pipeline:
     def warm_start(self, file: str) -> int:
         """Pre-fill the ML window and forecast history from the last W+60 s of a recording.
         Raises FileNotFoundError / ValueError."""
-        path = resolve_recording(self.state.settings.recordings_dir, file)
+        path = resolve_recording(self.state.settings.recording_dirs, file)
         data = dataset.load([str(path)], self.state.registry)
         rows = data.segments[-1].rows if data.segments else []
         rows = [r for r in rows if r.ms is not None]
@@ -252,6 +253,7 @@ class Pipeline:
             "scenarios": sorted(self.sim_profile["scenarios"]),
             "ml_thresholds": self.ml_thresholds(),
             "serial": self.serial_info(),
+            "version": version_info(),
         }
 
     def serial_info(self) -> dict[str, Any]:
@@ -260,7 +262,8 @@ class Pipeline:
         every SERIAL_CHECK_S seconds (status is sent often)."""
         if self.state.settings.force_source == "simulator":
             return {"available": False, "port": None,
-                    "note": "Serial disabled (MHM_SOURCE=simulator). Unset it and restart to use the Arduino."}
+                    "note": ("Serial disabled: simulator-only mode (MHM_SOURCE=simulator, "
+                             "--simulator or 'Start (simulator only).bat'). Restart with Start.bat to use the Arduino.")}
         if isinstance(self.source, SerialSource):
             return {"available": True, "port": self.source.status().get("serial_port"), "note": None}
         now = time.monotonic()

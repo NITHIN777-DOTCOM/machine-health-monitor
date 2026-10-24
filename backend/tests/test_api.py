@@ -219,4 +219,5 @@ def test_serial_unavailable_when_forced_to_simulator(client):
     main.app.state.mhm.settings.force_source = "simulator"
     serial = client.get("/api/status").json()["serial"]
     assert serial == {"available": False, "port": None,
-                      "note": "Serial disabled (MHM_SOURCE=simulator). Unset it and restart to use the Arduino."}
+                      "note": ("Serial disabled: simulator-only mode (MHM_SOURCE=simulator, "
+                               "--simulator or 'Start (simulator only).bat'). Restart with Start.bat to use the Arduino.")}

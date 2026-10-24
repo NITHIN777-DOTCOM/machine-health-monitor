@@ -206,3 +206,24 @@ def test_plain_words_by_statistic():
 def test_short_name_drops_the_explanation():
     assert short_name("Sound level (peak deviation)") == "Sound level"
     assert short_name("Vibration") == "Vibration"
+
+
+def _features_at(scorer, z_by_feature):
+    """A feature dict at the normal mean, except the given features at the given z."""
+    stats = scorer.meta["normal_stats"]
+    return {name: st["mean"] + z_by_feature.get(name, 0.0) * st["std"] for name, st in stats.items()}
+
+
+def test_level_wording_wins_over_spread_for_the_same_sensor(scorer):
+    # Vibration's spread is further from normal than its level, but both are unusual:
+    # the cause (and so the headline detail) says "far above normal", not "very unstable".
+    feats = _features_at(scorer, {"vib_count__std": 40.0, "vib_count__mean": 8.0, "temp_c__mean": 2.5})
+    causes = scorer.causes(feats)
+    assert causes[0]["feature"] == "vib_count__mean" and causes[0]["text"] == "Vibration: far above normal"
+    assert causes[1]["sensor"] == "temp_c"
+
+
+def test_spread_wording_kept_when_the_level_is_normal(scorer):
+    feats = _features_at(scorer, {"vib_count__std": 7.0, "vib_count__mean": 1.0})
+    top = scorer.causes(feats)[0]
+    assert top["feature"] == "vib_count__std" and top["text"] == "Vibration: very unstable"

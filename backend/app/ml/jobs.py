@@ -42,7 +42,7 @@ class TrainJobs:
             raise ValueError("give at least one recording file name (from GET /api/recordings)")
         if self.busy:
             raise JobBusy("a training job is already running")
-        paths = [resolve_recording(self.settings.recordings_dir, f) for f in files]
+        paths = [resolve_recording(self.settings.recording_dirs, f) for f in files]
         job = {"id": uuid.uuid4().hex[:8], "status": "queued", "step": "queued", "files": list(files),
                "started": time.time(), "finished": None, "elapsed_s": 0.0, "message": None, "result": None}
         self.jobs[job["id"]] = job

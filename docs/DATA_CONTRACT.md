@@ -372,7 +372,11 @@ from the normal mean, capped at ±99), a `band` and plain-language `text`, e.g.
 "Vibration: far above normal". Bands of |z|: **< 2 normal, 2–3 slight, 3–6 clear, ≥ 6 far**.
 Words by statistic: level features (mean/last/min/max) "slightly high / above normal / far
 above normal" (or low/below); std "slightly unstable / unstable / very unstable" (or
-"unusually steady"); slope "rising slightly / rising / rising fast" (or falling). The
+"unusually steady"); slope "rising slightly / rising / rising fast" (or falling). Per sensor
+the feature with the largest |z| is used, **except that an unusual level feature (|z| ≥ 2) wins
+over a larger std or slope z**, so a vibration fault reads "far above normal", not "very
+unstable", in the list and in `headline_detail`. The dashboard lists causes only while ML is
+ANOMALY or health is at or below the clear level (60); otherwise it says "Nothing unusual". The
 dashboard shows the words and puts z only in a tooltip (never a capped value like 99).
 
 **ML status** is one of `OK`, `ANOMALY`, `WARMING_UP` (window not full yet; seconds left
@@ -395,8 +399,10 @@ below `forecast_min_r2`), medium (0.6–0.85), high (≥ 0.85)**, with R² in a 
 every 5 s), and `note` says why. For a replay, `progress` is the share of the file played in
 the current pass (0..1; `source_detail` has `rows_total` and `passes`). While recording or
 replaying, the backend pushes a status message once a second so the row count, elapsed time
-and progress stay current. `GET /api/recordings` lists `file`, `rows`, `duration_s` (device
-clock, i.e. what a 1x replay takes), `size_bytes` and `modified` (ISO time).
+and progress stay current. `GET /api/recordings` lists `file`, `folder` (`recordings` or
+`demo`), `rows`, `duration_s` (device clock, i.e. what a 1x replay takes), `size_bytes` and
+`modified` (ISO time); `data/demo/` holds the simulated demo recording of the portable build.
+`GET /api/status` also has `version`: `{app, name, version, git, build_date, frozen}`.
 
 **Warm start.** A recording's last W + 60 s can pre-fill the ML window and the forecast
 history, so a new source doesn't start with "warming up". For the first W live rows the

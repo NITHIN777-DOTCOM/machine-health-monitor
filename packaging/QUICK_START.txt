@@ -1,0 +1,112 @@
+PREDICTIVE MACHINE HEALTH MONITOR  v{version}  -  QUICK START
+=====================================================================
+
+Works on any Windows 10/11 laptop. Nothing to install: no Python, no Node,
+no internet. You can run it from this folder, a pendrive, or anywhere else.
+
+
+1. START IT
+-----------
+  - (Optional) Plug the Arduino into a USB port first.
+  - Double-click  Start.bat
+  - A black console window opens, and after a few seconds the dashboard
+    opens in your web browser (http://127.0.0.1:8000).
+  - The console window shows where the data comes from:
+        Data source:  Arduino on COM5          <- real sensors
+        Data source:  Simulator (no Arduino found)
+  - Keep the console window open while you use the dashboard.
+
+  First time only: Windows may show a blue "Windows protected your PC"
+  window (SmartScreen). The app is not signed, which is normal for a student
+  project. Click  "More info"  then  "Run anyway".
+  If Windows Defender or another antivirus blocks or quarantines
+  MachineHealthMonitor.exe, choose "Allow" / "Restore", or add this folder as
+  an exception. (The zip may also need: right-click the zip -> Properties ->
+  tick "Unblock" -> OK, before extracting.)
+
+
+2. DEMO BACKUP: SIMULATOR ONLY
+------------------------------
+  If the Arduino misbehaves, or you just want a reliable demo:
+  close the console window, then double-click
+        Start (simulator only).bat
+  It never touches the COM port, even with the Arduino plugged in.
+  In the dashboard, open "Controls" (top right) to pick a scenario
+  (Normal, Sudden fault, Slow drift, Recovery, Sensor fault) and a speed.
+
+  Recorded demo (no hardware needed): Controls -> Recorded -> pick
+  demo_SIMULATED_drift_recovery.csv -> Play. It is about 5 minutes of
+  SIMULATED data: normal, a slow temperature drift into CRITICAL, then
+  recovery. "Start from recording" (warm start) can use the same file.
+
+
+3. STOP IT
+----------
+  Close the console window (the X in its corner), or press Ctrl+C in it.
+  This stops the app. Closing only the browser tab does NOT stop it.
+
+
+4. IF SOMETHING GOES WRONG
+--------------------------
+  The browser did not open
+      Open your browser yourself and go to the "Dashboard:" address shown in
+      the console window, e.g.  http://127.0.0.1:8000
+      Use 127.0.0.1, not "localhost".
+
+  "Already running at http://127.0.0.1:8000/"
+      The app is already open (maybe in another console window). It just
+      opened the browser to the running copy. That is fine.
+
+  Port busy / a different port number
+      If another program uses port 8000, the app picks the next free one
+      (8001 ... 8010) and the console shows it, e.g.
+      "(port 8000 busy, so this copy uses 8001)". Use the address shown.
+      To choose a port yourself: open a Command Prompt in this folder and run
+          MachineHealthMonitor.exe --port 8050
+
+  Arduino not detected ("Simulator (no Arduino found)")
+      - Unplug and replug the USB cable, wait 5 seconds, close the console
+        window and start again.
+      - Try another USB port or cable (some cables only charge).
+      - Check Device Manager -> "Ports (COM & LPT)": the Arduino should be
+        listed with a COM number. Clone boards need the CH340 driver.
+      - Force a port: open a Command Prompt here and run
+            set MHM_PORT=COM5
+            MachineHealthMonitor.exe
+
+  "COM5 busy, close Serial Monitor"
+      Only one program can use the Arduino's port. Close the Arduino IDE's
+      Serial Monitor (or the whole Arduino IDE). The app reconnects by
+      itself within 2 seconds.
+
+  The console window closes immediately or shows an error
+      Look in the  logs\  folder (next to this file) for today's log file,
+      e.g. logs\mhm_20261024.log, and send it to whoever maintains the app.
+
+
+5. WHAT IS IN THIS FOLDER
+-------------------------
+  Start.bat                     start (Arduino if plugged in, else simulator)
+  Start (simulator only).bat    start without ever using the COM port
+  MachineHealthMonitor.exe      the app itself (Start.bat runs it)
+  _internal\                    files the app needs; do not change
+  config\                       settings.json, sensors.json, sim_profile.json
+                                (you may edit these; restart the app after)
+  models\                       the ML model
+  data\recordings\              your recordings (Record button) are saved here
+  data\demo\                    the SIMULATED demo recording
+  logs\                         log files (created on first start)
+  firmware\                     the Arduino sketch sources and wiring notes
+
+  Command-line options of MachineHealthMonitor.exe:
+      --simulator    simulator only, never opens a COM port
+      --port N       first port to try (default 8000)
+      --no-browser   do not open the browser
+
+
+IMPORTANT: ABOUT THE ML MODEL
+-----------------------------
+  The ML model in this version is PROVISIONAL: it was trained on simulated
+  data only. The dashboard marks it "provisional model". It is fine for a
+  demo; it is not a measured result. Using this on a real machine needs that
+  machine's own normal data, re-derived limits and a retrained model.

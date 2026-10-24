@@ -6,7 +6,9 @@ Settings come from backend/config/settings.json, plus environment variables:
     MHM_SOURCE "simulator": start on the simulator and never open (or even list) a serial
                port; POST /api/source {"type": "serial"} is refused. For working on the
                software while another program uses the Arduino's COM port.
-    MHM_ROOT   project root folder (the one containing backend/, data/, models/)
+    MHM_ROOT   writable root folder (the repo in development, the exe folder when portable)
+
+Where each file lives (repo vs next to the exe) is decided in paths.py.
 """
 from __future__ import annotations
 
@@ -16,16 +18,17 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import paths
+
 log = logging.getLogger(__name__)
 
-ROOT_DIR = Path(os.environ.get("MHM_ROOT") or Path(__file__).resolve().parents[2])
-BACKEND_DIR = ROOT_DIR / "backend"
-CONFIG_DIR = BACKEND_DIR / "config"
+ROOT_DIR = paths.APP_DIR
+CONFIG_DIR = paths.CONFIG_DIR
 SENSORS_PATH = CONFIG_DIR / "sensors.json"
 SIM_PROFILE_PATH = CONFIG_DIR / "sim_profile.json"
 SETTINGS_PATH = CONFIG_DIR / "settings.json"
-RECORDINGS_DIR = ROOT_DIR / "data" / "recordings"
-MODELS_DIR = ROOT_DIR / "models"
+RECORDINGS_DIR = paths.RECORDINGS_DIR
+MODELS_DIR = paths.MODELS_DIR
 FORCEABLE_SOURCES = ("simulator",)   # values MHM_SOURCE accepts
 
 
@@ -53,15 +56,21 @@ class Settings:
     max_speed: float = 20.0
     recordings_dir: Path = field(default=RECORDINGS_DIR)
     models_dir: Path = field(default=MODELS_DIR)
+    demo_dir: Path | None = None     # read-only demo recordings (data/demo), listed after recordings_dir
+
+    @property
+    def recording_dirs(self) -> list[Path]:
+        """Where replay / warm start / training look for a recording by name."""
+        return [self.recordings_dir] + ([self.demo_dir] if self.demo_dir else [])
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     """Load settings; a missing or broken file falls back to defaults (never raises)."""
-    settings = Settings()
+    settings = Settings(demo_dir=paths.DEMO_DIR)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         for key, value in data.items():
-            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "env_port", "force_source"):
+            if hasattr(settings, key) and key not in ("recordings_dir", "models_dir", "demo_dir", "env_port", "force_source"):
                 setattr(settings, key, value)
             else:
                 log.warning("settings.json: unknown key %r ignored", key)

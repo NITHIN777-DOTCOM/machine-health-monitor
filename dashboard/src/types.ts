@@ -212,6 +212,17 @@ export interface Status {
   scenarios: string[];
   ml_thresholds: MlThresholds;
   serial: SerialInfo;
+  version: VersionInfo;
+}
+
+/** App version: git describe + build date of the portable build (null in development). */
+export interface VersionInfo {
+  app: string;
+  name: string;
+  version: string;
+  git: string | null;
+  build_date: string | null;
+  frozen: boolean;
 }
 
 /** ML smoothing levels (settings.json): ANOMALY after health < anomaly_health for
@@ -241,6 +252,8 @@ export interface HistoryRow {
 /** One entry of GET /api/recordings. */
 export interface Recording {
   file: string;
+  /** "recordings" (data/recordings) or "demo" (data/demo, the simulated demo recording). */
+  folder: string;
   size_bytes: number;
   rows: number;
   duration_s: number | null;

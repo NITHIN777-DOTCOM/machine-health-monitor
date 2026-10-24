@@ -1,4 +1,4 @@
-# Dashboard (Phase 5)
+# Dashboard (Phase 5, served by the backend since Phase 6)
 
 React + TypeScript (strict) single page that shows what the backend sees: the overall
 status, the device rules, the ML opinion, every sensor, 5-minute trends and the forecast.
@@ -28,8 +28,9 @@ npm run dev                                   -> open http://127.0.0.1:5173
 
 Use `127.0.0.1`, not `localhost`: on the dev laptop WebSocket connections to `localhost`
 hang on IPv6. The Vite dev server forwards `/api/...` and `/ws/stream` to the backend
-(`vite.config.ts`). The app only uses **relative URLs**, so the same build will work when
-FastAPI serves it in Phase 6.
+(`vite.config.ts`). The app only uses **relative URLs**, so the same build works when FastAPI
+serves it: after `npm run build`, http://127.0.0.1:8000/ shows the dashboard with no dev server
+(that is how the portable exe works).
 
 Scenarios, replay and recording are in the **Controls** panel (button in the top bar).
 The same switch with curl:
@@ -48,7 +49,7 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
 | `npm test` | Vitest unit tests (formatting, cause/confidence bands, sensor cards, trend buffer, chart grid, control logic) |
 | `npm run typecheck` | TypeScript check only |
 | `npm run build` | Type check + production build into `dist/` (gitignored) |
-| `npm run screenshots:install` | Once: downloads Playwright's Chromium **into this project** (`node_modules`) |
+| `npm run screenshots:install` | Once: downloads Playwright's Chromium **into this project** (`node_modules`). `npm ci` (also run by `build.bat`) deletes it: run this again afterwards. |
 | `npm run screenshots` | Takes the review screenshots into `docs/screenshots/phase5/` (backend with `MHM_SOURCE=simulator` + dev server must be running): the five scenarios, recording, controls and replay, at 1366x768 and 1920x1080, light and dark. `npm run screenshots -- recovery` for one step (`replay` needs `recording` in the same run). The recording it makes is deleted at the end. |
 | `node scripts/contrast.mjs` | WCAG contrast check of the colour tokens |
 
@@ -68,7 +69,8 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
    ML anomaly still active" instead of promising "back to normal".
 3. **Device rules** (state, reason, quiet hold countdown, "mirror agrees" / "mismatch"),
    **ML** (status, health 0-100 with a bar and the anomaly level from `ml_thresholds`, up to
-   2 causes in plain words such as "Vibration: far above normal" with z only in the tooltip,
+   2 causes in plain words such as "Vibration: far above normal" with z only in the tooltip, listed
+   only while ML is ANOMALY or health is at/below the clear level (else "Nothing unusual"),
    "provisional model" note), **Forecast** (for sensors with `forecast: true`: "critical in
    ~3 min", "no data" when the sensor's newest value is missing, and "confidence: low /
    medium / high" from the fit R², which is in the tooltip).
@@ -77,7 +79,8 @@ Scenarios: `normal`, `sudden_fault`, `slow_drift`, `sensor_fault`, `recovery`, `
    shows "No reading - sensor fault".
 5. **Trends**: one chart per enabled sensor plus the ML health score, last 5 minutes of
    the **device clock** (`ms`), with dashed warn/critical lines.
-6. **Footer**: source, serial port, rows received/rejected, model date.
+6. **Footer**: source, serial port, rows received/rejected, model date, app version
+   (`status.version`: "v0.6.0 · git describe · built date", or "dev").
 7. **Controls** (right-hand drawer, opened from the top bar; overlays the page below 1100 px):
    - **Data source**: Live (Arduino) / Simulated / Recorded (`POST /api/source`). Live is
      disabled, with the backend's reason, when `status.serial.available` is false

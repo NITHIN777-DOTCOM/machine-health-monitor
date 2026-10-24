@@ -1,4 +1,4 @@
-import { causeText, causeTooltip, healthLabel, healthTone, mlView, type HealthLevels } from "../lib/format";
+import { causeText, causeTooltip, healthLabel, healthTone, mlView, visibleCauses, type HealthLevels } from "../lib/format";
 import type { MlBlock, Registry } from "../types";
 import { Icon } from "./Icon";
 
@@ -14,8 +14,8 @@ export function MlCard({ ml, registry, levels }: Props) {
   const health = ml?.health ?? null;
   const tone = healthTone(health, levels);
   const name = (key: string) => registry?.sensors.find((s) => s.key === key)?.display_name;
-  // Only features that really differ (|z| >= 2); "Humidity: normal" is not a cause.
-  const causes = (ml?.causes ?? []).filter((c) => Math.abs(c.z) >= 2).slice(0, 2);
+  // Only when ML is worried, and only features that really differ (|z| >= 2).
+  const causes = visibleCauses(ml, levels);
   // Calm when healthy: the bar and number only take a status colour below the clear level.
   const abnormal = tone === "warning" || tone === "ml";
   return (

@@ -10,7 +10,7 @@ import csv
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Sequence
 
 from ..models import TS_COLUMN, SensorRow, now_iso, row_from_stored
 from ..registry import TIME_COLUMN
@@ -21,13 +21,16 @@ log = logging.getLogger(__name__)
 MAX_GAP_S = 10.0  # gaps longer than this in a recording are shortened
 
 
-def resolve_recording(recordings_dir: Path, name: str) -> Path:
-    """Map a file name to a path inside recordings_dir. Raises FileNotFoundError."""
-    base = recordings_dir.resolve()
-    path = (base / name).resolve()
-    if path.parent != base or path.suffix.lower() != ".csv" or not path.is_file():
-        raise FileNotFoundError(f"No recording named {name!r} in {recordings_dir}")
-    return path
+def resolve_recording(recordings_dir: Path | Sequence[Path], name: str) -> Path:
+    """Map a file name to a path directly inside recordings_dir (or the first of several
+    folders that has it, e.g. data/recordings then data/demo). Raises FileNotFoundError."""
+    dirs = [recordings_dir] if isinstance(recordings_dir, Path) else list(recordings_dir)
+    for d in dirs:
+        base = d.resolve()
+        path = (base / name).resolve()
+        if path.parent == base and path.suffix.lower() == ".csv" and path.is_file():
+            return path
+    raise FileNotFoundError(f"No recording named {name!r} in {', '.join(str(d) for d in dirs)}")
 
 
 def _seconds(record: dict[str, str], prev: dict[str, str] | None) -> float:

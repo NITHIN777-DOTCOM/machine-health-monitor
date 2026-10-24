@@ -91,7 +91,7 @@ export function friendlyError(text: string): string {
     return "Port busy: close the Arduino IDE Serial Monitor (or any other program using the port).";
   }
   if (/MHM_SOURCE=simulator/.test(text)) {
-    return "Serial is disabled (MHM_SOURCE=simulator). Unset it and restart the backend to use the Arduino.";
+    return "Serial is disabled: the app runs in simulator-only mode. Close it and start it with Start.bat to use the Arduino.";
   }
   return text;
 }
