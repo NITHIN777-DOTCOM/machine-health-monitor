@@ -1,0 +1,1672 @@
+{
+ "stamp": "REAL DATA - held-out test session",
+ "created": "2026-10-24T17:11:27+05:30",
+ "session": "real_session_02_test_20261024.csv",
+ "files": {
+  "cleaned": "real_session_02_test_20261024.csv",
+  "steps": "session_02_steps.tsv",
+  "live": "raw/raw_session_20261024_153633.csv"
+ },
+ "rows": 1993,
+ "margin_s": 15.0,
+ "episode_grace_s": 3.0,
+ "ml_sensors": [
+  "temp_c",
+  "humidity",
+  "sound_peak",
+  "vib_count"
+ ],
+ "model": {
+  "status": "bench-trained on real data (session 01)",
+  "created": "2026-10-24T16:50:46+05:30",
+  "trained_on": {
+   "real_rows": 868,
+   "synthetic_rows": 0,
+   "sessions": [
+    "real_session_01_20261024.csv"
+   ]
+  },
+  "sensors": [
+   "temp_c",
+   "humidity",
+   "sound_peak",
+   "vib_count"
+  ],
+  "feature_count": 16,
+  "provisional": false,
+  "deployment_note": "trained on a bench setup; a real machine needs its own normal data and a retrain"
+ },
+ "label_sets": {
+  "cleaned": {
+   "faults": [
+    {
+     "kind": "subtle_vibration",
+     "name": "Subtle vibration (light taps, below the limit)",
+     "subtle": true,
+     "sensors": [
+      "vib_count"
+     ],
+     "ml_sensor": true,
+     "rows": 35,
+     "rules": {
+      "rows": 0,
+      "episodes": 4,
+      "delay_s": 3.0
+     },
+     "ml": {
+      "rows": 23,
+      "episodes": 4,
+      "delay_s": 5.0
+     },
+     "episodes": 4,
+     "span_s": 56.0,
+     "start": "2026-10-24T15:43:56.914+05:30",
+     "rules_missed": 35,
+     "ml_on_rules_missed": 23,
+     "health_min": 0.0,
+     "health_median": 54.7,
+     "instant_below_50": 10,
+     "first": "rules"
+    },
+    {
+     "kind": "subtle_sound",
+     "name": "Subtle sound (music, humming, below the limit)",
+     "subtle": true,
+     "sensors": [
+      "sound_peak"
+     ],
+     "ml_sensor": true,
+     "rows": 36,
+     "rules": {
+      "rows": 0,
+      "episodes": 1,
+      "delay_s": 70.0
+     },
+     "ml": {
+      "rows": 27,
+      "episodes": 16,
+      "delay_s": 11.0
+     },
+     "episodes": 17,
+     "span_s": 164.0,
+     "start": "2026-10-24T15:50:37.285+05:30",
+     "rules_missed": 36,
+     "ml_on_rules_missed": 27,
+     "health_min": 26.7,
+     "health_median": 47.4,
+     "instant_below_50": 25,
+     "first": "ml"
+    },
+    {
+     "kind": "strong_vibration",
+     "name": "Strong vibration (firm knocks)",
+     "subtle": false,
+     "sensors": [
+      "vib_count"
+     ],
+     "ml_sensor": true,
+     "rows": 29,
+     "rules": {
+      "rows": 29,
+      "episodes": 1,
+      "delay_s": 0.0
+     },
+     "ml": {
+      "rows": 27,
+      "episodes": 1,
+      "delay_s": 2.0
+     },
+     "episodes": 1,
+     "span_s": 29.0,
+     "start": "2026-10-24T15:55:01.187+05:30",
+     "rules_missed": 0,
+     "ml_on_rules_missed": 0,
+     "health_min": 0.0,
+     "health_median": 13.5,
+     "instant_below_50": 29,
+     "first": "rules"
+    },
+    {
+     "kind": "claps",
+     "name": "Loud claps",
+     "subtle": false,
+     "sensors": [
+      "sound_peak"
+     ],
+     "ml_sensor": true,
+     "rows": 11,
+     "rules": {
+      "rows": 11,
+      "episodes": 1,
+      "delay_s": 0.0
+     },
+     "ml": {
+      "rows": 9,
+      "episodes": 1,
+      "delay_s": 2.0
+     },
+     "episodes": 1,
+     "span_s": 11.0,
+     "start": "2026-10-24T15:56:49.560+05:30",
+     "rules_missed": 0,
+     "ml_on_rules_missed": 0,
+     "health_min": 0.0,
+     "health_median": 0.0,
+     "instant_below_50": 11,
+     "first": "rules"
+    },
+    {
+     "kind": "safety_zone",
+     "name": "Safety zone (hand near the HC-SR04)",
+     "subtle": false,
+     "sensors": [
+      "distance_cm"
+     ],
+     "ml_sensor": false,
+     "rows": 29,
+     "rules": {
+      "rows": 28,
+      "episodes": 1,
+      "delay_s": 1.0
+     },
+     "ml": null,
+     "episodes": 1,
+     "span_s": 29.0,
+     "start": "2026-10-24T15:57:59.798+05:30",
+     "first": "rules"
+    },
+    {
+     "kind": "leak",
+     "name": "Water leak (+ arm in the safety zone)",
+     "subtle": false,
+     "sensors": [
+      "leak_raw",
+      "distance_cm"
+     ],
+     "ml_sensor": false,
+     "rows": 37,
+     "rules": {
+      "rows": 37,
+      "episodes": 1,
+      "delay_s": 0.0
+     },
+     "ml": null,
+     "episodes": 1,
+     "span_s": 37.0,
+     "start": "2026-10-24T15:59:57.203+05:30",
+     "first": "rules"
+    },
+    {
+     "kind": "temperature",
+     "name": "Temperature (fingertip on the DHT11)",
+     "subtle": false,
+     "sensors": [
+      "temp_c"
+     ],
+     "ml_sensor": true,
+     "rows": 69,
+     "rules": {
+      "rows": 53,
+      "episodes": 2,
+      "delay_s": 16.0
+     },
+     "ml": {
+      "rows": 67,
+      "episodes": 2,
+      "delay_s": 0.0
+     },
+     "episodes": 2,
+     "span_s": 74.0,
+     "start": "2026-10-24T16:03:01.834+05:30",
+     "rules_missed": 16,
+     "ml_on_rules_missed": 16,
+     "health_min": 11.5,
+     "health_median": 28.2,
+     "instant_below_50": 54,
+     "first": "ml"
+    }
+   ],
+   "false_alarms": {
+    "hands_off": {
+     "name": "Hands-off normal (steps 1, 10 and the gaps)",
+     "rows": 760,
+     "rows_excl_margin": 746,
+     "rules": 0,
+     "rules_excl_margin": 0,
+     "ml": 46,
+     "ml_excl_margin": 37,
+     "health_median": 100.0,
+     "health_below_50": 22
+    },
+    "everyday": {
+     "name": "Everyday activity (step 2)",
+     "rows": 152,
+     "rows_excl_margin": 152,
+     "rules": 0,
+     "rules_excl_margin": 0,
+     "ml": 16,
+     "ml_excl_margin": 16,
+     "health_median": 100.0,
+     "health_below_50": 8
+    }
+   },
+   "totals": {
+    "fault_rows": 246,
+    "rules_rows": 158,
+    "ml_visible_fault_rows": 180,
+    "rules_rows_ml_visible": 93,
+    "ml_rows": 153,
+    "episodes": 27,
+    "rules_episodes": 11,
+    "ml_visible_episodes": 25,
+    "ml_episodes": 24
+   }
+  },
+  "live": {
+   "faults": [
+    {
+     "kind": "subtle_vibration",
+     "name": "Subtle vibration (light taps, below the limit)",
+     "subtle": true,
+     "sensors": [
+      "vib_count"
+     ],
+     "ml_sensor": true,
+     "rows": 71,
+     "rules": {
+      "rows": 21,
+      "episodes": 1,
+      "delay_s": 17.0
+     },
+     "ml": {
+      "rows": 39,
+      "episodes": 1,
+      "delay_s": 19.0
+     },
+     "episodes": 1,
+     "span_s": 71.0,
+     "start": "2026-10-24T15:43:42.865+05:30",
+     "rules_missed": 50,
+     "ml_on_rules_missed": 24,
+     "health_min": 0.0,
+     "health_median": 54.7,
+     "instant_below_50": 28,
+     "first": "rules"
+    },
+    {
+     "kind": "subtle_sound",
+     "name": "Subtle sound (music, humming, below the limit)",
+     "subtle": true,
+     "sensors": [
+      "sound_peak"
+     ],
+     "ml_sensor": true,
+     "rows": 301,
+     "rules": {
+      "rows": 10,
+      "episodes": 1,
+      "delay_s": 207.0
+     },
+     "ml": {
+      "rows": 90,
+      "episodes": 1,
+      "delay_s": 148.0
+     },
+     "episodes": 1,
+     "span_s": 301.0,
+     "start": "2026-10-24T15:48:19.813+05:30",
+     "rules_missed": 291,
+     "ml_on_rules_missed": 82,
+     "health_min": 0.0,
+     "health_median": 80.5,
+     "instant_below_50": 76,
+     "first": "ml"
+    },
+    {
+     "kind": "strong_vibration",
+     "name": "Strong vibration (firm knocks)",
+     "subtle": false,
+     "sensors": [
+      "vib_count"
+     ],
+     "ml_sensor": true,
+     "rows": 43,
+     "rules": {
+      "rows": 37,
+      "episodes": 1,
+      "delay_s": 6.0
+     },
+     "ml": {
+      "rows": 35,
+      "episodes": 1,
+      "delay_s": 8.0
+     },
+     "episodes": 1,
+     "span_s": 43.0,
+     "start": "2026-10-24T15:54:55.166+05:30",
+     "rules_missed": 6,
+     "ml_on_rules_missed": 0,
+     "health_min": 0.0,
+     "health_median": 13.5,
+     "instant_below_50": 37,
+     "first": "rules"
+    },
+    {
+     "kind": "claps",
+     "name": "Loud claps",
+     "subtle": false,
+     "sensors": [
+      "sound_peak"
+     ],
+     "ml_sensor": true,
+     "rows": 26,
+     "rules": {
+      "rows": 15,
+      "episodes": 1,
+      "delay_s": 5.0
+     },
+     "ml": {
+      "rows": 19,
+      "episodes": 1,
+      "delay_s": 7.0
+     },
+     "episodes": 1,
+     "span_s": 26.0,
+     "start": "2026-10-24T15:56:44.541+05:30",
+     "rules_missed": 11,
+     "ml_on_rules_missed": 6,
+     "health_min": 0.0,
+     "health_median": 0.0,
+     "instant_below_50": 20,
+     "first": "rules"
+    },
+    {
+     "kind": "safety_zone",
+     "name": "Safety zone (hand near the HC-SR04)",
+     "subtle": false,
+     "sensors": [
+      "distance_cm"
+     ],
+     "ml_sensor": false,
+     "rows": 40,
+     "rules": {
+      "rows": 30,
+      "episodes": 1,
+      "delay_s": 0.0
+     },
+     "ml": null,
+     "episodes": 1,
+     "span_s": 40.0,
+     "start": "2026-10-24T15:58:07.827+05:30",
+     "first": "rules"
+    },
+    {
+     "kind": "leak",
+     "name": "Water leak (+ arm in the safety zone)",
+     "subtle": false,
+     "sensors": [
+      "leak_raw",
+      "distance_cm"
+     ],
+     "ml_sensor": false,
+     "rows": 40,
+     "rules": {
+      "rows": 37,
+      "episodes": 1,
+      "delay_s": 3.0
+     },
+     "ml": null,
+     "episodes": 1,
+     "span_s": 40.0,
+     "start": "2026-10-24T15:59:54.191+05:30",
+     "first": "rules"
+    },
+    {
+     "kind": "temperature",
+     "name": "Temperature (fingertip on the DHT11)",
+     "subtle": false,
+     "sensors": [
+      "temp_c"
+     ],
+     "ml_sensor": true,
+     "rows": 100,
+     "rules": {
+      "rows": 59,
+      "episodes": 1,
+      "delay_s": 41.0
+     },
+     "ml": {
+      "rows": 87,
+      "episodes": 1,
+      "delay_s": 0.0
+     },
+     "episodes": 1,
+     "span_s": 100.0,
+     "start": "2026-10-24T16:02:36.747+05:30",
+     "rules_missed": 41,
+     "ml_on_rules_missed": 32,
+     "health_min": 11.5,
+     "health_median": 30.0,
+     "instant_below_50": 71,
+     "first": "ml"
+    }
+   ],
+   "false_alarms": {
+    "hands_off": {
+     "name": "Hands-off normal (steps 1, 10 and the gaps)",
+     "rows": 874,
+     "rows_excl_margin": 799,
+     "rules": 29,
+     "rules_excl_margin": 24,
+     "ml": 104,
+     "ml_excl_margin": 71,
+     "health_median": 100.0,
+     "health_below_50": 59
+    },
+    "everyday": {
+     "name": "Everyday activity (step 2)",
+     "rows": 172,
+     "rows_excl_margin": 172,
+     "rules": 10,
+     "rules_excl_margin": 10,
+     "ml": 24,
+     "ml_excl_margin": 24,
+     "health_median": 100.0,
+     "health_below_50": 20
+    }
+   },
+   "totals": {
+    "fault_rows": 621,
+    "rules_rows": 209,
+    "ml_visible_fault_rows": 541,
+    "rules_rows_ml_visible": 142,
+    "ml_rows": 270,
+    "episodes": 7,
+    "rules_episodes": 7,
+    "ml_visible_episodes": 5,
+    "ml_episodes": 5
+   }
+  }
+ },
+ "subtle": {
+  "answer": "partly",
+  "detail": {
+   "cleaned": {
+    "subtle_vibration": {
+     "rows": 35,
+     "rules_rows": 0,
+     "rules_missed": 35,
+     "ml_on_rules_missed": 23,
+     "ml_episodes": 4,
+     "episodes": 4,
+     "health_min": 0.0,
+     "instant_below_50": 10
+    },
+    "subtle_sound": {
+     "rows": 36,
+     "rules_rows": 0,
+     "rules_missed": 36,
+     "ml_on_rules_missed": 27,
+     "ml_episodes": 16,
+     "episodes": 17,
+     "health_min": 26.7,
+     "instant_below_50": 25
+    }
+   },
+   "live": {
+    "subtle_vibration": {
+     "rows": 71,
+     "rules_rows": 21,
+     "rules_missed": 50,
+     "ml_on_rules_missed": 24,
+     "ml_episodes": 1,
+     "episodes": 1,
+     "health_min": 0.0,
+     "instant_below_50": 28
+    },
+    "subtle_sound": {
+     "rows": 301,
+     "rules_rows": 10,
+     "rules_missed": 291,
+     "ml_on_rules_missed": 82,
+     "ml_episodes": 1,
+     "episodes": 1,
+     "health_min": 0.0,
+     "instant_below_50": 76
+    }
+   }
+  }
+ },
+ "forecast": {
+  "available": true,
+  "sensor": "temp_c",
+  "step_start": "2026-10-24T16:02:36.747+05:30",
+  "forecast_first": "2026-10-24T16:02:43.772+05:30",
+  "forecast_eta_s": 279.2,
+  "forecast_value": 30.2,
+  "rules_warning": "2026-10-24T16:03:17.888+05:30",
+  "rules_value": 32.3,
+  "lead_s": 34.0,
+  "forecast_predicted_critical": true,
+  "forecast_warn_rows_elsewhere": 114,
+  "rows_elsewhere": 1736
+ },
+ "chart": {
+  "kind": "subtle_vibration",
+  "name": "Subtle vibration (light taps, below the limit)",
+  "sensor": "vib_count",
+  "rows": [
+   {
+    "t": -20.0,
+    "ts": "2026-10-24T15:43:22.795+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -19.0,
+    "ts": "2026-10-24T15:43:23.803+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -18.0,
+    "ts": "2026-10-24T15:43:24.803+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -17.0,
+    "ts": "2026-10-24T15:43:25.807+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -16.0,
+    "ts": "2026-10-24T15:43:26.811+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -15.0,
+    "ts": "2026-10-24T15:43:27.815+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -14.0,
+    "ts": "2026-10-24T15:43:28.818+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -13.0,
+    "ts": "2026-10-24T15:43:29.823+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -12.0,
+    "ts": "2026-10-24T15:43:30.826+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -11.0,
+    "ts": "2026-10-24T15:43:31.829+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -10.0,
+    "ts": "2026-10-24T15:43:32.831+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -9.0,
+    "ts": "2026-10-24T15:43:33.837+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -8.0,
+    "ts": "2026-10-24T15:43:34.837+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -7.0,
+    "ts": "2026-10-24T15:43:35.847+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -6.0,
+    "ts": "2026-10-24T15:43:36.844+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -5.0,
+    "ts": "2026-10-24T15:43:37.851+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -4.0,
+    "ts": "2026-10-24T15:43:38.852+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -3.0,
+    "ts": "2026-10-24T15:43:39.858+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -2.0,
+    "ts": "2026-10-24T15:43:40.859+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": -1.0,
+    "ts": "2026-10-24T15:43:41.863+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 0.0,
+    "ts": "2026-10-24T15:43:42.865+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 1.0,
+    "ts": "2026-10-24T15:43:43.870+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 2.0,
+    "ts": "2026-10-24T15:43:44.873+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 3.0,
+    "ts": "2026-10-24T15:43:45.874+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 4.0,
+    "ts": "2026-10-24T15:43:46.878+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 5.0,
+    "ts": "2026-10-24T15:43:47.884+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 6.0,
+    "ts": "2026-10-24T15:43:48.887+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 7.0,
+    "ts": "2026-10-24T15:43:49.892+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 8.0,
+    "ts": "2026-10-24T15:43:50.894+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 9.0,
+    "ts": "2026-10-24T15:43:51.898+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 10.0,
+    "ts": "2026-10-24T15:43:52.899+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 11.0,
+    "ts": "2026-10-24T15:43:53.905+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 12.0,
+    "ts": "2026-10-24T15:43:54.906+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 13.0,
+    "ts": "2026-10-24T15:43:55.911+05:30",
+    "value": 0.0,
+    "health": 100.0,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 14.0,
+    "ts": "2026-10-24T15:43:56.914+05:30",
+    "value": 10.0,
+    "health": 72.7,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 15.0,
+    "ts": "2026-10-24T15:43:57.918+05:30",
+    "value": 2.0,
+    "health": 77.1,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 16.0,
+    "ts": "2026-10-24T15:43:58.920+05:30",
+    "value": 4.0,
+    "health": 74.4,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 17.0,
+    "ts": "2026-10-24T15:43:59.925+05:30",
+    "value": 258.0,
+    "health": 4.1,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 18.0,
+    "ts": "2026-10-24T15:44:00.927+05:30",
+    "value": 260.0,
+    "health": 3.9,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 19.0,
+    "ts": "2026-10-24T15:44:01.932+05:30",
+    "value": 12.0,
+    "health": 10.6,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 20.0,
+    "ts": "2026-10-24T15:44:02.935+05:30",
+    "value": 0.0,
+    "health": 17.8,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 21.0,
+    "ts": "2026-10-24T15:44:03.940+05:30",
+    "value": 0.0,
+    "health": 17.8,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 22.0,
+    "ts": "2026-10-24T15:44:04.941+05:30",
+    "value": 0.0,
+    "health": 17.8,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "CRITICAL"
+   },
+   {
+    "t": 23.0,
+    "ts": "2026-10-24T15:44:05.946+05:30",
+    "value": 0.0,
+    "health": 17.8,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 24.0,
+    "ts": "2026-10-24T15:44:06.943+05:30",
+    "value": 0.0,
+    "health": 17.7,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 25.0,
+    "ts": "2026-10-24T15:44:07.953+05:30",
+    "value": 0.0,
+    "health": 11.0,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 26.0,
+    "ts": "2026-10-24T15:44:08.954+05:30",
+    "value": 0.0,
+    "health": 5.7,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 27.0,
+    "ts": "2026-10-24T15:44:09.961+05:30",
+    "value": 0.0,
+    "health": 16.3,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 28.0,
+    "ts": "2026-10-24T15:44:10.962+05:30",
+    "value": 8.0,
+    "health": 67.6,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 29.0,
+    "ts": "2026-10-24T15:44:11.966+05:30",
+    "value": 2.0,
+    "health": 73.6,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 30.0,
+    "ts": "2026-10-24T15:44:12.969+05:30",
+    "value": 8.0,
+    "health": 67.5,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 31.0,
+    "ts": "2026-10-24T15:44:13.974+05:30",
+    "value": 13.0,
+    "health": 62.5,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 32.0,
+    "ts": "2026-10-24T15:44:14.976+05:30",
+    "value": 5.0,
+    "health": 63.6,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 33.0,
+    "ts": "2026-10-24T15:44:15.979+05:30",
+    "value": 2.0,
+    "health": 68.4,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 34.0,
+    "ts": "2026-10-24T15:44:16.981+05:30",
+    "value": 2.0,
+    "health": 66.7,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 35.0,
+    "ts": "2026-10-24T15:44:17.986+05:30",
+    "value": 0.0,
+    "health": 71.6,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 36.0,
+    "ts": "2026-10-24T15:44:18.988+05:30",
+    "value": 2.0,
+    "health": 66.2,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 37.0,
+    "ts": "2026-10-24T15:44:19.994+05:30",
+    "value": 6.0,
+    "health": 64.1,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 38.0,
+    "ts": "2026-10-24T15:44:20.996+05:30",
+    "value": 14.0,
+    "health": 61.8,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 39.0,
+    "ts": "2026-10-24T15:44:22.001+05:30",
+    "value": 7.0,
+    "health": 64.2,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 40.0,
+    "ts": "2026-10-24T15:44:23.002+05:30",
+    "value": 6.0,
+    "health": 63.4,
+    "rules": false,
+    "ml": false,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 41.0,
+    "ts": "2026-10-24T15:44:23.998+05:30",
+    "value": 72.0,
+    "health": 35.8,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 42.0,
+    "ts": "2026-10-24T15:44:25.010+05:30",
+    "value": 7.0,
+    "health": 50.8,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 43.0,
+    "ts": "2026-10-24T15:44:26.015+05:30",
+    "value": 2.0,
+    "health": 48.4,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 44.0,
+    "ts": "2026-10-24T15:44:27.016+05:30",
+    "value": 12.0,
+    "health": 45.7,
+    "rules": true,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 45.0,
+    "ts": "2026-10-24T15:44:28.023+05:30",
+    "value": 4.0,
+    "health": 0.0,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 46.0,
+    "ts": "2026-10-24T15:44:29.025+05:30",
+    "value": 0.0,
+    "health": 50.6,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 47.0,
+    "ts": "2026-10-24T15:44:30.028+05:30",
+    "value": 2.0,
+    "health": 47.0,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 48.0,
+    "ts": "2026-10-24T15:44:31.030+05:30",
+    "value": 6.0,
+    "health": 45.9,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 49.0,
+    "ts": "2026-10-24T15:44:32.035+05:30",
+    "value": 0.0,
+    "health": 47.4,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 50.0,
+    "ts": "2026-10-24T15:44:33.036+05:30",
+    "value": 0.0,
+    "health": 47.2,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 51.0,
+    "ts": "2026-10-24T15:44:34.041+05:30",
+    "value": 12.0,
+    "health": 54.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 52.0,
+    "ts": "2026-10-24T15:44:35.044+05:30",
+    "value": 28.0,
+    "health": 49.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 53.0,
+    "ts": "2026-10-24T15:44:36.049+05:30",
+    "value": 20.0,
+    "health": 48.2,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 54.0,
+    "ts": "2026-10-24T15:44:37.052+05:30",
+    "value": 52.0,
+    "health": 43.7,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 55.0,
+    "ts": "2026-10-24T15:44:38.056+05:30",
+    "value": 0.0,
+    "health": 49.1,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 56.0,
+    "ts": "2026-10-24T15:44:39.057+05:30",
+    "value": 0.0,
+    "health": 55.6,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 57.0,
+    "ts": "2026-10-24T15:44:40.064+05:30",
+    "value": 2.0,
+    "health": 55.4,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 58.0,
+    "ts": "2026-10-24T15:44:41.065+05:30",
+    "value": 5.0,
+    "health": 54.6,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 59.0,
+    "ts": "2026-10-24T15:44:42.070+05:30",
+    "value": 0.0,
+    "health": 54.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 60.0,
+    "ts": "2026-10-24T15:44:43.070+05:30",
+    "value": 19.0,
+    "health": 48.2,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 61.0,
+    "ts": "2026-10-24T15:44:44.077+05:30",
+    "value": 14.0,
+    "health": 49.1,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 62.0,
+    "ts": "2026-10-24T15:44:45.080+05:30",
+    "value": 32.0,
+    "health": 49.3,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 63.0,
+    "ts": "2026-10-24T15:44:46.083+05:30",
+    "value": 17.0,
+    "health": 53.1,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 64.0,
+    "ts": "2026-10-24T15:44:47.086+05:30",
+    "value": 22.0,
+    "health": 51.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 65.0,
+    "ts": "2026-10-24T15:44:48.086+05:30",
+    "value": 18.0,
+    "health": 51.2,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 66.0,
+    "ts": "2026-10-24T15:44:49.093+05:30",
+    "value": 18.0,
+    "health": 51.9,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 67.0,
+    "ts": "2026-10-24T15:44:50.097+05:30",
+    "value": 6.0,
+    "health": 56.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 68.0,
+    "ts": "2026-10-24T15:44:51.099+05:30",
+    "value": 13.0,
+    "health": 54.7,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 69.0,
+    "ts": "2026-10-24T15:44:52.103+05:30",
+    "value": 14.0,
+    "health": 0.0,
+    "rules": false,
+    "ml": true,
+    "label": "fault",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 70.0,
+    "ts": "2026-10-24T15:44:53.105+05:30",
+    "value": 8.0,
+    "health": 0.0,
+    "rules": false,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 71.0,
+    "ts": "2026-10-24T15:44:54.110+05:30",
+    "value": 25.0,
+    "health": 0.0,
+    "rules": false,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 72.0,
+    "ts": "2026-10-24T15:44:55.112+05:30",
+    "value": 6.0,
+    "health": 0.0,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 73.0,
+    "ts": "2026-10-24T15:44:56.117+05:30",
+    "value": 0.0,
+    "health": 60.4,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 74.0,
+    "ts": "2026-10-24T15:44:57.120+05:30",
+    "value": 0.0,
+    "health": 59.1,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 75.0,
+    "ts": "2026-10-24T15:44:58.125+05:30",
+    "value": 0.0,
+    "health": 58.7,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 76.0,
+    "ts": "2026-10-24T15:44:59.127+05:30",
+    "value": 0.0,
+    "health": 58.6,
+    "rules": true,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "WARNING"
+   },
+   {
+    "t": 77.0,
+    "ts": "2026-10-24T15:45:00.130+05:30",
+    "value": 0.0,
+    "health": 58.5,
+    "rules": false,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 78.0,
+    "ts": "2026-10-24T15:45:01.145+05:30",
+    "value": 0.0,
+    "health": 61.0,
+    "rules": false,
+    "ml": true,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 79.0,
+    "ts": "2026-10-24T15:45:02.137+05:30",
+    "value": 0.0,
+    "health": 62.1,
+    "rules": false,
+    "ml": true,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 80.0,
+    "ts": "2026-10-24T15:45:03.141+05:30",
+    "value": 0.0,
+    "health": 65.2,
+    "rules": false,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 81.0,
+    "ts": "2026-10-24T15:45:04.144+05:30",
+    "value": 0.0,
+    "health": 81.3,
+    "rules": false,
+    "ml": true,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 82.0,
+    "ts": "2026-10-24T15:45:05.147+05:30",
+    "value": 10.0,
+    "health": 66.7,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 83.0,
+    "ts": "2026-10-24T15:45:06.152+05:30",
+    "value": 10.0,
+    "health": 65.1,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 84.0,
+    "ts": "2026-10-24T15:45:07.155+05:30",
+    "value": 0.0,
+    "health": 73.4,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 85.0,
+    "ts": "2026-10-24T15:45:08.158+05:30",
+    "value": 2.0,
+    "health": 69.8,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 86.0,
+    "ts": "2026-10-24T15:45:09.161+05:30",
+    "value": 0.0,
+    "health": 74.1,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 87.0,
+    "ts": "2026-10-24T15:45:10.165+05:30",
+    "value": 0.0,
+    "health": 74.8,
+    "rules": false,
+    "ml": false,
+    "label": "normal",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 88.0,
+    "ts": "2026-10-24T15:45:11.168+05:30",
+    "value": 0.0,
+    "health": 73.8,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 89.0,
+    "ts": "2026-10-24T15:45:12.173+05:30",
+    "value": 12.0,
+    "health": 63.9,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   },
+   {
+    "t": 90.0,
+    "ts": "2026-10-24T15:45:13.174+05:30",
+    "value": 10.0,
+    "health": 63.1,
+    "rules": false,
+    "ml": false,
+    "label": "unknown",
+    "dev_state": "NORMAL"
+   }
+  ]
+ },
+ "subtle_text": "Partly: ML flagged 24 of the 50 subtle-vibration rows the rules missed and 82 of the 291 subtle-sound rows the rules missed (live labels); 23 of the 35 subtle-vibration rows the rules missed and 27 of the 36 subtle-sound rows the rules missed (cleaned labels)."
+}

@@ -373,6 +373,9 @@ def to_markdown(r: dict[str, Any]) -> str:
             f = sets[k]["faults"][i]
             cells += [_cell(f, "rules"), _cell(f, "ml")]
         out.append(f"| {f0['name']} | " + " | ".join(cells) + " |\n")
+    out.append("\nA rules cell with **0 rows but caught episodes** means the board alarmed on a row next to the "
+               "episode (within the grace time) that is not a fault row of this label set, e.g. an over-limit tap "
+               "that the clean-up labelled unknown.\n")
     out.append("\n**Which raised the alarm first:**\n\n")
     for k in sets:
         out.append(f"- {SET_NAMES[k]}: " + ", ".join(
@@ -387,7 +390,7 @@ def to_markdown(r: dict[str, Any]) -> str:
 
     v = r["subtle"]
     out += ["\n## Did ML catch the subtle faults the rules missed?\n\n",
-            f"**Answer: {v['answer'].upper()}.** {r.get('subtle_text', '')}\n\n",
+            f"**Answer: {v['answer'].upper()}.** {r.get('subtle_text', '').split(': ', 1)[-1]}\n\n",
             "| Label set | Subtle fault | Fault rows | Rules flagged | Rows the rules missed | ML flagged of those | "
             "ML episodes | Lowest health | Rows with health < 50 (before smoothing) |\n",
             "|---|---|---|---|---|---|---|---|---|\n"]
@@ -429,5 +432,16 @@ def to_markdown(r: dict[str, Any]) -> str:
             "only by how fast they change (`ml_stats`: std, slope), so a slow, steady temperature rise is a job for the "
             "rules and the forecast.\n",
             "\n## Definitions\n\n",
-            (__doc__ or "").split("Definitions", 1)[1].split("ML can only", 1)[0].replace("\n  ", "\n- ").strip(), "\n"]
+            "All counts are rows of 1 s; a row counts once its 10 s ML window is full.\n\n",
+            "- **Rules flag:** the board's own `dev_state` is WARNING or CRITICAL (what drives the buzzer).\n",
+            "- **ML flag:** the smoothed ML status is ANOMALY (what the dashboard shows).\n",
+            "- **Fault kind:** the fault step a fault row belongs to; a fault row inside a gap belongs to the next "
+            "fault step (step 7 started 8 s before its label switch).\n",
+            "- **Delay:** seconds from the first fault row of a kind to the first flag at or after it, up to the last "
+            f"fault row + {r['margin_s']:g} s.\n",
+            "- **Episode:** a run of consecutive fault rows; caught if a flag falls inside it or up to "
+            f"{r['episode_grace_s']:g} s after it (ML needs 3 rows below 50 before it says ANOMALY).\n",
+            f"- **False alarm:** a flag on a normal row; \"excluding\" leaves out normal rows up to {r['margin_s']:g} s "
+            "after a fault row of the same label set (after-effects by design).\n",
+            "\nInterpretation, the limit suggestions and every decision: `docs/phase8_report.md`.\n"]
     return "".join(out)
