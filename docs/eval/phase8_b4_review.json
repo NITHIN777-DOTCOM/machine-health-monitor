@@ -1,0 +1,209 @@
+{
+  "note": "B4 calibration review, session 01 validation rows only (scripts/select_model.py docstring). first_run = all 24 features; variants = candidate (a) recipe with feature/contamination changes.",
+  "first_run": {
+    "chosen": "a",
+    "why": "neither has FA <= 2%; (a) has the lower FA; calibration reviewed",
+    "calibration_check": {
+      "median_health": 53.45,
+      "share_below_50": 0.19540229885057472,
+      "target": "median >= 90 and <= 2% below 50",
+      "passed": false
+    },
+    "validation": {
+      "a": {
+        "trained_on": {
+          "real_rows": 694,
+          "synthetic_rows": 0,
+          "sessions": [
+            "real_session_01_20261024.csv"
+          ],
+          "windows": 587
+        },
+        "false_alarms": {
+          "rows": 124,
+          "of": 170,
+          "rate": 0.7294117647058823,
+          "raw_rows": 128,
+          "raw_of": 174,
+          "raw_rate": 0.735632183908046
+        },
+        "detection": {
+          "rows": 570,
+          "of": 685,
+          "rate": 0.8321167883211679,
+          "episodes": 7,
+          "of_episodes": 8,
+          "mean_delay_s": 4.857142857142857
+        },
+        "rules_detection": {
+          "rows": 595,
+          "of": 685,
+          "rate": 0.8686131386861314
+        },
+        "ml_on_fault_rows_rules_missed": {
+          "rows": 51,
+          "of": 90
+        },
+        "health_on_heldout_normal": {
+          "rows": 174,
+          "median": 53.45,
+          "p5": 28.06,
+          "min": 11.3,
+          "share_below_50": 0.19540229885057472,
+          "share_below_60": 0.7126436781609196
+        }
+      },
+      "b": {
+        "trained_on": {
+          "real_rows": 694,
+          "synthetic_rows": 3600,
+          "sessions": [
+            "real_session_01_20261024.csv"
+          ],
+          "windows": 4133
+        },
+        "false_alarms": {
+          "rows": 156,
+          "of": 170,
+          "rate": 0.9176470588235294,
+          "raw_rows": 160,
+          "raw_of": 174,
+          "raw_rate": 0.9195402298850575
+        },
+        "detection": {
+          "rows": 632,
+          "of": 685,
+          "rate": 0.9226277372262773,
+          "episodes": 7,
+          "of_episodes": 8,
+          "mean_delay_s": 3.142857142857143
+        },
+        "rules_detection": {
+          "rows": 595,
+          "of": 685,
+          "rate": 0.8686131386861314
+        },
+        "ml_on_fault_rows_rules_missed": {
+          "rows": 82,
+          "of": 90
+        },
+        "health_on_heldout_normal": {
+          "rows": 174,
+          "median": 48.3,
+          "p5": 33.32,
+          "min": 20.0,
+          "share_below_50": 0.7701149425287356,
+          "share_below_60": 1.0
+        }
+      }
+    },
+    "contamination": 0.01
+  },
+  "variants": {
+    "V1 temp+hum std/slope": {
+      "false_alarms": {
+        "rows": 42,
+        "of": 170,
+        "rate": 0.24705882352941178,
+        "raw_rows": 46,
+        "raw_of": 174,
+        "raw_rate": 0.26436781609195403
+      },
+      "detection": {
+        "rows": 392,
+        "of": 685,
+        "rate": 0.5722627737226277,
+        "episodes": 7,
+        "of_episodes": 8,
+        "mean_delay_s": 4.571428571428571
+      },
+      "rules_detection": {
+        "rows": 595,
+        "of": 685,
+        "rate": 0.8686131386861314
+      },
+      "ml_on_fault_rows_rules_missed": {
+        "rows": 51,
+        "of": 90
+      },
+      "health_on_heldout_normal": {
+        "rows": 174,
+        "median": 100.0,
+        "p5": 28.06,
+        "min": 11.3,
+        "share_below_50": 0.1781609195402299,
+        "share_below_60": 0.3103448275862069
+      }
+    },
+    "V2 V1 + contamination 0.005": {
+      "false_alarms": {
+        "rows": 42,
+        "of": 170,
+        "rate": 0.24705882352941178,
+        "raw_rows": 46,
+        "raw_of": 174,
+        "raw_rate": 0.26436781609195403
+      },
+      "detection": {
+        "rows": 392,
+        "of": 685,
+        "rate": 0.5722627737226277,
+        "episodes": 7,
+        "of_episodes": 8,
+        "mean_delay_s": 4.571428571428571
+      },
+      "rules_detection": {
+        "rows": 595,
+        "of": 685,
+        "rate": 0.8686131386861314
+      },
+      "ml_on_fault_rows_rules_missed": {
+        "rows": 51,
+        "of": 90
+      },
+      "health_on_heldout_normal": {
+        "rows": 174,
+        "median": 100.0,
+        "p5": 28.06,
+        "min": 11.3,
+        "share_below_50": 0.1781609195402299,
+        "share_below_60": 0.2988505747126437
+      }
+    },
+    "V3 hum std/slope only": {
+      "false_alarms": {
+        "rows": 124,
+        "of": 170,
+        "rate": 0.7294117647058823,
+        "raw_rows": 128,
+        "raw_of": 174,
+        "raw_rate": 0.735632183908046
+      },
+      "detection": {
+        "rows": 572,
+        "of": 685,
+        "rate": 0.8350364963503649,
+        "episodes": 7,
+        "of_episodes": 8,
+        "mean_delay_s": 4.571428571428571
+      },
+      "rules_detection": {
+        "rows": 595,
+        "of": 685,
+        "rate": 0.8686131386861314
+      },
+      "ml_on_fault_rows_rules_missed": {
+        "rows": 51,
+        "of": 90
+      },
+      "health_on_heldout_normal": {
+        "rows": 174,
+        "median": 54.6,
+        "p5": 28.06,
+        "min": 11.3,
+        "share_below_50": 0.21264367816091953,
+        "share_below_60": 0.7126436781609196
+      }
+    }
+  }
+}

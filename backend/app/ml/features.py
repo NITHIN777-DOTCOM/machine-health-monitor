@@ -17,9 +17,9 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from ..registry import Registry
+from ..registry import ML_STATS, Registry
 
-STATS = ("mean", "std", "min", "max", "slope", "last")
+STATS = ML_STATS
 
 
 def ml_sensor_keys(registry: Registry) -> list[str]:
@@ -27,8 +27,16 @@ def ml_sensor_keys(registry: Registry) -> list[str]:
     return [s.key for s in registry.ml]
 
 
-def feature_names(sensor_keys: Sequence[str]) -> list[str]:
-    return [f"{key}__{stat}" for key in sensor_keys for stat in STATS]
+def ml_stats(registry: Registry) -> dict[str, list[str]]:
+    """Per ML sensor, the statistics the model uses (registry "ml_stats"; default all)."""
+    return {s.key: list(s.ml_stats) for s in registry.ml if s.ml_stats}
+
+
+def feature_names(sensor_keys: Sequence[str], stats: Mapping[str, Sequence[str]] | None = None) -> list[str]:
+    """"<sensor>__<stat>" for every ML sensor; stats limits a sensor to some statistics
+    (registry "ml_stats", e.g. room climate: only std and slope, not the level)."""
+    stats = stats or {}
+    return [f"{key}__{stat}" for key in sensor_keys for stat in STATS if stat in stats.get(key, STATS)]
 
 
 def split_feature(name: str) -> tuple[str, str]:

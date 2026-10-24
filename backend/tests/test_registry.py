@@ -112,3 +112,14 @@ def test_registry_columns_match_data_contract_header(registry):
     doc = (ROOT_DIR / "docs" / "DATA_CONTRACT.md").read_text(encoding="utf-8")
     header = re.search(r"^# (ms,[a-z_,]+)$", doc, re.MULTILINE).group(1)
     assert header.split(",") == registry.csv_columns
+
+
+def test_ml_stats_parsing(make_registry):
+    def edit(d):
+        d["sensors"][0]["ml_stats"] = ["slope", "std"]          # any order -> canonical order
+        d["sensors"][1]["ml_stats"] = ["median"]               # invalid -> all, with a warning
+    reg = make_registry(edit)
+    s0, s1 = reg.sensors[0], reg.sensors[1]
+    assert s0.ml_stats == ("std", "slope") and s1.ml_stats is None
+    assert any("ml_stats" in w for w in reg.warnings)
+    assert s0.to_dict()["ml_stats"] == ["std", "slope"]

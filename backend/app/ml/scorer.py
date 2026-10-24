@@ -18,7 +18,7 @@ import sklearn
 
 from ..config import MODELS_DIR
 from ..registry import Registry
-from .features import FeatureWindow, ml_sensor_keys, split_feature, to_vector
+from .features import FeatureWindow, feature_names, ml_sensor_keys, ml_stats, split_feature, to_vector
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +115,13 @@ class Scorer:
             self.status = NEEDS_RETRAIN
             self.message = (f"model needs retrain (sensors changed): model uses {trained}, "
                             f"registry ML sensors are {current}")
+            log.warning(self.message)
+            return
+        expected = feature_names(current, ml_stats(registry))
+        if list(self.meta.get("feature_names", [])) != expected:
+            self.status = NEEDS_RETRAIN
+            self.message = ("model needs retrain (ML statistics changed): sensors.json ml_stats asks for "
+                            f"{len(expected)} features, the model has {len(self.meta.get('feature_names', []))}")
             log.warning(self.message)
             return
         n_in = getattr(model, "n_features_in_", None)

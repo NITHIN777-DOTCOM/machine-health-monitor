@@ -36,6 +36,21 @@ CALIBRATION CHECK (B4), on the held-out normal rows with the chosen candidate:
   If it fails, a change is made only from validation numbers and is recorded in the
   output (--contamination is the knob; every run writes what it used).
 
+B4 REVIEW (added 2026-10-24 AFTER the first run; the rule above is unchanged):
+  First run (all 24 features): FA (a) 124/170, (b) 156/170: neither acceptable, (a) by
+  step 4. Calibration check failed (median 53.5, 19.5 % below 50). Diagnosis on the
+  validation rows: the held-out minutes are warmer (to 31.3 C) and drier (to 71 %RH) than
+  the training minutes, so the temperature/humidity LEVEL features fall outside the
+  training range and the range term pulls health to 50-60, where the smoothing latches
+  ANOMALY. --contamination cannot fix that (0.005 gave identical numbers). Change, from
+  validation only: temperature and humidity enter the model by their change (std, slope),
+  not their level (sensors.json "ml_stats"); the temperature level stays with the rules and
+  the forecast. Re-run of BOTH candidates with that feature set, same rule. Remaining flags
+  on held-out normal are table bumps (vibration 13-40) left in session 01's normal labels
+  and the cool-down after its temperature fault: not calibrated away, because accepting
+  vibration 13-40 as normal would blind the model to subtle vibration. Numbers of the first
+  run and the variants: docs/eval/phase8_b4_review.json.
+
 FINAL FIT: the chosen recipe refit on ALL of session 01's normal rows (the 20 % holdout
 included: it holds the session's warmest, driest minutes, which the shipped model should
 know). The validation numbers describe the 80 % fit; the final test (session 02,
@@ -61,6 +76,7 @@ import numpy as np  # noqa: E402
 import generate_synthetic as gen  # noqa: E402
 from app.config import MODELS_DIR, ROOT_DIR, load_settings  # noqa: E402
 from app.ml import dataset, evaluation, roles, training  # noqa: E402
+from app.ml.features import ml_stats  # noqa: E402
 from app.ml.scorer import Scorer  # noqa: E402
 from app.paths import MANIFEST_FILE, RECORDINGS_DIR  # noqa: E402
 from app.registry import Registry  # noqa: E402
@@ -105,12 +121,20 @@ def validate(model, meta, val: dataset.Dataset, registry: Registry, settings) ->
     normal = [t for t in res["trace"] if t["label"] == "normal" and t["window_full"]]
     health = np.array([t["health"] for t in normal if t["health"] is not None], dtype=float)
     rules = res["metrics"]["rules"]
+    # Diagnostic only (not in the rule): held-out normal rows whose whole window is quiet
+    # (vibration and sound < 10, session 02's definition of undisturbed normal).
+    tr = res["trace"]
+    quiet = [t for i, t in enumerate(tr) if t["label"] == "normal" and t["window_full"] and t["after_fault_s"] is not None
+             and t["after_fault_s"] > res["margin_s"]
+             and all((u["values"].get("vib_count") or 0) < 10 and (u["values"].get("sound_peak") or 0) < 10
+                     for u in tr[max(0, i - 9):i + 1])]
     beyond = [t for t in res["trace"] if t["label"] == "fault" and t["window_full"] and not t["flags"]["rules"]]
     return {
         "false_alarms": {"rows": m["normal_flagged"], "of": m["normal"], "rate": m["false_alarm_rate"],
                          "raw_rows": m["normal_raw_flagged"], "raw_of": m["normal_raw"], "raw_rate": m["false_alarm_rate_raw"]},
         "detection": {"rows": m["fault_flagged"], "of": m["fault"], "rate": m["detection_rate"],
                       "episodes": m["episodes_detected"], "of_episodes": m["episodes"], "mean_delay_s": m["mean_delay_s"]},
+        "false_alarms_quiet_normal": {"rows": sum(t["flags"]["ml"] for t in quiet), "of": len(quiet)},
         "rules_detection": {"rows": rules["fault_flagged"], "of": rules["fault"], "rate": rules["detection_rate"]},
         "ml_on_fault_rows_rules_missed": {"rows": sum(t["flags"]["ml"] for t in beyond), "of": len(beyond)},
         "health_on_heldout_normal": {
@@ -178,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"({k}) trained on {sizes[k]['real_rows']} real + {sizes[k]['synthetic_rows']} synthetic rows: "
               f"FA {r['false_alarms']['rows']}/{r['false_alarms']['of']}  DET {r['detection']['rows']}/{r['detection']['of']} "
               f"(episodes {r['detection']['episodes']}/{r['detection']['of_episodes']})  "
+              f"[FA on quiet normal {r['false_alarms_quiet_normal']['rows']}/{r['false_alarms_quiet_normal']['of']}]  "
               f"health on held-out normal: median {r['health_on_heldout_normal']['median']:.1f}, "
               f"{r['health_on_heldout_normal']['share_below_50']:.1%} below 50")
     chosen, why = choose(results)
@@ -194,13 +219,17 @@ def main(argv: list[str] | None = None) -> int:
                                               settings.hold_seconds), registry)
         final_data = dataset.Dataset(data.files + f_syn.files, data.segments + f_syn.segments)
     selection = {"rule": RULE, "chosen": chosen, "why": why, "contamination": args.contamination,
+                 "ml_stats": ml_stats(registry), "feature_count": None,
                  "validation": {k: {"trained_on": sizes[k], **results[k]} for k in results},
                  "calibration_check": calib}
     model, meta = training.train(final_data, registry, **{**params, "extra_meta": {
         "status": STATUS, "deployment_note": DEPLOYMENT_NOTE, "provisional": False, "provisional_reason": None,
         "candidate": {"a": "real normal only", "b": "real + synthetic normal (--from-real)"}[chosen],
-        "selection": {"rule": RULE, "chosen": chosen, "why": why,
-                      "validation_split": split, "calibration_check": calib}}})
+        "selection": {"rule": RULE, "chosen": chosen, "why": why, "validation_split": split,
+                      "calibration_check": calib, "ml_stats": ml_stats(registry),
+                      "validation": {k: {"false_alarms": results[k]["false_alarms"], "detection": results[k]["detection"]}
+                                     for k in results}}}})
+    selection["feature_count"] = len(meta["feature_names"])
     training.save(model, meta, args.out)
     print(f"final model: {meta['trained_on']}, {meta['training']['windows']} windows -> {args.out}")
 

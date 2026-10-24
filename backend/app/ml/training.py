@@ -34,7 +34,7 @@ from sklearn.ensemble import IsolationForest
 
 from ..registry import Registry
 from .dataset import Dataset
-from .features import FeatureWindow, feature_names, ml_sensor_keys
+from .features import FeatureWindow, feature_names, ml_sensor_keys, ml_stats
 from .scorer import RANGE_B, RANGE_K, health_from_score
 
 MIN_WINDOWS = 50
@@ -56,10 +56,10 @@ class TrainingError(Exception):
 
 
 def build_training_matrix(dataset: Dataset, sensors: list[str], window_s: float,
-                          max_missing_frac: float) -> tuple[np.ndarray, dict[str, Any]]:
+                          max_missing_frac: float, names: list[str] | None = None) -> tuple[np.ndarray, dict[str, Any]]:
     """Window features from label=normal rows only. Any other row breaks the window, so
     no training window ever contains a fault or unknown row."""
-    names = feature_names(sensors)
+    names = names or feature_names(sensors)
     X: list[list[float]] = []
     rows_used: Counter = Counter()
     windows: Counter = Counter()
@@ -99,6 +99,7 @@ def calibrate(scores: np.ndarray, threshold: float) -> dict[str, float]:
 def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_missing_frac: float = 0.3,
           n_estimators: int = 200, contamination: float = 0.01, random_state: int = 42,
           sessions: list[str] | None = None, extra_meta: dict[str, Any] | None = None,
+          stats: dict[str, list[str]] | None = None,
           ) -> tuple[IsolationForest, dict[str, Any]]:
     """Fit on the label=normal rows of `dataset`. sessions: the recording sessions behind the
     real rows (MANIFEST.json names, for the meta); extra_meta overrides/extends the meta
@@ -106,7 +107,8 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
     sensors = ml_sensor_keys(registry)
     if not sensors:
         raise TrainingError("No ML sensors: no sensor has enabled AND include_in_ml in sensors.json")
-    X, info = build_training_matrix(dataset, sensors, window_s, max_missing_frac)
+    names = feature_names(sensors, stats if stats is not None else ml_stats(registry))
+    X, info = build_training_matrix(dataset, sensors, window_s, max_missing_frac, names)
     if len(X) < MIN_WINDOWS:
         raise TrainingError(f"Only {len(X)} normal windows (need at least {MIN_WINDOWS}). "
                             "Record or generate more label=normal data.")
@@ -118,7 +120,6 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
     cal = calibrate(scores, model.offset_)
 
     health = np.array([health_from_score(s, cal) for s in scores])
-    names = feature_names(sensors)
     n_real, n_syn = info["rows_normal_by_source"]["real"], info["rows_normal_by_source"]["synthetic"]
     synthetic_used = n_syn > 0
     meta: dict[str, Any] = {

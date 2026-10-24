@@ -28,6 +28,8 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
+      "ml_stats": ["std", "slope"],
+      "ml_stats_note": "room climate: ML uses how it changes (std, slope), not its level, which drifts with the room (Phase 8.2 validation); the temperature level is watched by the rules and the forecast",
       "forecast": true,
       "firmware_flag": "USE_DHT11",
       "lcd_name": "TMP"
@@ -45,6 +47,8 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
+      "ml_stats": ["std", "slope"],
+      "ml_stats_note": "room climate: ML uses how it changes (std, slope), not its level, which drifts with the room (Phase 8.2 validation); the temperature level is watched by the rules and the forecast",
       "forecast": false,
       "firmware_flag": "USE_DHT11",
       "lcd_name": "HUM",

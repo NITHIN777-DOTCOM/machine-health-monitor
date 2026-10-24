@@ -1,4 +1,6 @@
 """Training rules, health calibration, and the scorer's status handling."""
+import copy
+
 import numpy as np
 import pytest
 
@@ -25,7 +27,9 @@ def windows(scorer, rows):
 def test_meta_contents(trained, reg):
     model, meta = trained
     assert meta["sensors"] == ["temp_c", "humidity", "sound_peak", "vib_count"]
-    assert len(meta["feature_names"]) == 24 and meta["window_s"] == 10
+    # 16 features: temperature and humidity use only std and slope (sensors.json ml_stats, Phase 8.2)
+    assert len(meta["feature_names"]) == 16 and meta["window_s"] == 10
+    assert not any(n.endswith(("__mean", "__last")) for n in meta["feature_names"] if n.startswith(("temp_c", "humidity")))
     assert meta["training"]["rows_normal_by_source"] == {"real": 0, "synthetic": 1200}
     assert meta["provisional"] is True and meta["provisional_reason"]
     assert set(meta["normal_stats"]) == set(meta["feature_names"])
@@ -137,11 +141,19 @@ def test_health_is_the_worse_of_both_parts():
     assert health_from_score(-0.66, cal, excess=1.0) == pytest.approx(25)     # IF part decides
 
 
-def test_vibration_13_is_a_mid_score(scorer, reg):
-    rows = sim_rows(reg, "normal", 15, 9)
+def test_vibration_13_is_a_mid_score(reg, profile):
+    """Range term: a value moderately outside a normal vibration of 0-6 gives a mid score.
+    Since Phase 8.2 the simulator's normal vibration is real-like (almost always 0), so this
+    test trains its own model on the 0-6 spread it was calibrated for."""
+    prof = copy.deepcopy(profile)
+    prof["sensors"]["vib_count"].update(mean=2.0, wander=1.0, noise=1.2, min=0, max=5)
+    data = Dataset(["a", "b"], [Segment("a", sim_rows(reg, "normal", 600, 1, profile=prof)),
+                                Segment("b", sim_rows(reg, "normal", 600, 2, profile=prof))])
+    sc = Scorer(reg, *training.train(data, reg, window_s=10, n_estimators=60))
+    rows = sim_rows(reg, "normal", 15, 9, profile=prof)
     for r in rows:
         r.values["vib_count"] = 13.0 + (r.ms // 1000) % 3 - 1
-    result = scorer.score(windows(scorer, rows)[-1])
+    result = sc.score(windows(sc, rows)[-1])
     assert result["ml_status"] == ANOMALY and 20 <= result["health"] <= 45
 
 
@@ -227,3 +239,14 @@ def test_spread_wording_kept_when_the_level_is_normal(scorer):
     feats = _features_at(scorer, {"vib_count__std": 7.0, "vib_count__mean": 1.0})
     top = scorer.causes(feats)[0]
     assert top["feature"] == "vib_count__std" and top["text"] == "Vibration: very unstable"
+
+
+def test_ml_stats_change_needs_retrain(trained, make_registry):
+    """A model trained with one ml_stats set is refused when sensors.json asks for another."""
+    model, meta = trained
+
+    def all_stats(d):
+        for s in d["sensors"]:
+            s.pop("ml_stats", None)
+    sc = Scorer(make_registry(all_stats), model, meta)
+    assert sc.status == NEEDS_RETRAIN and "ML statistics changed" in sc.message

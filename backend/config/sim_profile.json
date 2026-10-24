@@ -1,13 +1,13 @@
 {
-  "description": "Simulator baselines and fault scenarios. Values are guesses from docs/DATA_CONTRACT.md; replace with stats from real recordings. Sensor keys must match backend/config/sensors.json.",
+  "description": "Simulator baselines and fault scenarios. Phase 8.2: the normal baselines follow the real bench (session 01 normal rows: vibration mostly 0, sound 3-4, ~78 %RH, distance ~154 cm; the DHT11 barely changes within seconds, so temperature/humidity have no fast noise), so the real-data model sees simulated normal as normal. Sensor keys must match backend/config/sensors.json.",
   "tick_seconds": 1.0,
   "sensors": {
-    "temp_c":      {"mean": 29.5,  "wander": 1.0,  "wander_period_s": 600, "noise": 0.2,  "min": 28.0, "max": 31.0,  "physical_min": 0,   "physical_max": 50,   "decimals": 1},
-    "humidity":    {"mean": 60.0,  "wander": 6.0,  "wander_period_s": 900, "noise": 1.0,  "min": 50.0, "max": 70.0,  "physical_min": 20,  "physical_max": 90,   "decimals": 1},
-    "sound_peak":  {"mean": 5.0,   "wander": 1.0,  "wander_period_s": 120, "noise": 1.2,  "min": 3,    "max": 8,     "physical_min": 0,   "physical_max": 1023, "decimals": 0},
-    "vib_count":   {"mean": 2.0,   "wander": 1.0,  "wander_period_s": 90,  "noise": 1.2,  "min": 0,    "max": 5,     "physical_min": 0,   "physical_max": 1000, "decimals": 0},
-    "leak_raw":    {"mean": 15.0,  "wander": 3.0,  "wander_period_s": 300, "noise": 2.0,  "min": 5,    "max": 30,    "physical_min": 0,   "physical_max": 1023, "decimals": 0},
-    "distance_cm": {"mean": 40.0,  "wander": 0.5,  "wander_period_s": 300, "noise": 0.3,  "min": 38.0, "max": 42.0,  "physical_min": 2,   "physical_max": 400,  "decimals": 1},
+    "temp_c":      {"mean": 29.9,  "wander": 0.4,  "wander_period_s": 1200, "noise": 0.0,  "min": 29.3, "max": 31.3,  "physical_min": 0,   "physical_max": 50,   "decimals": 1},
+    "humidity":    {"mean": 78.0,  "wander": 1.5,  "wander_period_s": 1500, "noise": 0.0,  "min": 72.0, "max": 80.0,  "physical_min": 20,  "physical_max": 90,   "decimals": 0},
+    "sound_peak":  {"mean": 3.4,   "wander": 0.0,  "wander_period_s": 120,  "noise": 0.3,  "min": 3,    "max": 5,     "physical_min": 0,   "physical_max": 1023, "decimals": 0},
+    "vib_count":   {"mean": 0.0,   "wander": 0.0,  "wander_period_s": 90,   "noise": 0.25, "min": 0,    "max": 3,     "physical_min": 0,   "physical_max": 1000, "decimals": 0},
+    "leak_raw":    {"mean": 5.5,   "wander": 0.5,  "wander_period_s": 300,  "noise": 1.1,  "min": 3,    "max": 8,     "physical_min": 0,   "physical_max": 1023, "decimals": 0},
+    "distance_cm": {"mean": 154.0, "wander": 3.0,  "wander_period_s": 600,  "noise": 0.4,  "min": 147.0, "max": 158.0, "physical_min": 2,   "physical_max": 400,  "decimals": 1},
     "current_ma":  {"mean": 180.0, "wander": 5.0,  "wander_period_s": 300, "noise": 2.0,  "min": 170,  "max": 190,   "physical_min": 0,   "physical_max": 3200, "decimals": 1},
     "bus_v":       {"mean": 4.98,  "wander": 0.02, "wander_period_s": 300, "noise": 0.01, "min": 4.9,  "max": 5.05,  "physical_min": 0,   "physical_max": 26,   "decimals": 2}
   },

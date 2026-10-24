@@ -1,0 +1,143 @@
+{
+  "created": "2026-10-24T16:50:46+05:30",
+  "split": {
+    "holdout_frac": 0.2,
+    "train_normal_rows": 694,
+    "holdout_normal_rows": 174,
+    "holdout_from": "2026-10-24T12:04:46.725+05:30"
+  },
+  "final_trained_on": {
+    "real_rows": 868,
+    "synthetic_rows": 0,
+    "sessions": [
+      "real_session_01_20261024.csv"
+    ]
+  },
+  "params": {
+    "window_s": 10,
+    "max_missing_frac": 0.3,
+    "n_estimators": 200,
+    "contamination": 0.01,
+    "random_state": 42,
+    "sessions": [
+      "real_session_01_20261024.csv"
+    ]
+  },
+  "rule": "FA = held-out normal rows (outside the 15 s after-fault margin) flagged ANOMALY by the smoothed ML; DET = session 01 fault rows flagged ANOMALY. 1) acceptable if FA <= 2 %. 2) both acceptable: higher DET wins, (a) real-only if DET differs by < 2 points. 3) one acceptable: that one. 4) neither: lower FA, then review the calibration. Fixed before any candidate was trained.",
+  "chosen": "a",
+  "why": "neither has FA <= 2%; (a) has the lower FA; calibration reviewed",
+  "contamination": 0.01,
+  "ml_stats": {
+    "temp_c": [
+      "std",
+      "slope"
+    ],
+    "humidity": [
+      "std",
+      "slope"
+    ]
+  },
+  "feature_count": 16,
+  "validation": {
+    "a": {
+      "trained_on": {
+        "real_rows": 694,
+        "synthetic_rows": 0,
+        "sessions": [
+          "real_session_01_20261024.csv"
+        ],
+        "windows": 587
+      },
+      "false_alarms": {
+        "rows": 42,
+        "of": 170,
+        "rate": 0.24705882352941178,
+        "raw_rows": 46,
+        "raw_of": 174,
+        "raw_rate": 0.26436781609195403
+      },
+      "detection": {
+        "rows": 392,
+        "of": 685,
+        "rate": 0.5722627737226277,
+        "episodes": 7,
+        "of_episodes": 8,
+        "mean_delay_s": 4.571428571428571
+      },
+      "false_alarms_quiet_normal": {
+        "rows": 8,
+        "of": 116
+      },
+      "rules_detection": {
+        "rows": 595,
+        "of": 685,
+        "rate": 0.8686131386861314
+      },
+      "ml_on_fault_rows_rules_missed": {
+        "rows": 51,
+        "of": 90
+      },
+      "health_on_heldout_normal": {
+        "rows": 174,
+        "median": 100.0,
+        "p5": 28.06,
+        "min": 11.3,
+        "share_below_50": 0.1781609195402299,
+        "share_below_60": 0.3103448275862069
+      }
+    },
+    "b": {
+      "trained_on": {
+        "real_rows": 694,
+        "synthetic_rows": 3600,
+        "sessions": [
+          "real_session_01_20261024.csv"
+        ],
+        "windows": 4133
+      },
+      "false_alarms": {
+        "rows": 59,
+        "of": 170,
+        "rate": 0.34705882352941175,
+        "raw_rows": 63,
+        "raw_of": 174,
+        "raw_rate": 0.3620689655172414
+      },
+      "detection": {
+        "rows": 262,
+        "of": 685,
+        "rate": 0.38248175182481753,
+        "episodes": 7,
+        "of_episodes": 8,
+        "mean_delay_s": 6.428571428571429
+      },
+      "false_alarms_quiet_normal": {
+        "rows": 8,
+        "of": 116
+      },
+      "rules_detection": {
+        "rows": 595,
+        "of": 685,
+        "rate": 0.8686131386861314
+      },
+      "ml_on_fault_rows_rules_missed": {
+        "rows": 55,
+        "of": 90
+      },
+      "health_on_heldout_normal": {
+        "rows": 174,
+        "median": 87.3,
+        "p5": 32.565,
+        "min": 20.0,
+        "share_below_50": 0.3103448275862069,
+        "share_below_60": 0.3390804597701149
+      }
+    }
+  },
+  "calibration_check": {
+    "median_health": 100.0,
+    "share_below_50": 0.1781609195402299,
+    "target": "median >= 90 and <= 2% below 50",
+    "passed": false
+  }
+}

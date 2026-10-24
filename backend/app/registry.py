@@ -21,6 +21,7 @@ TIME_COLUMN = "ms"
 STATE_COLUMN = "dev_state"
 DIRECTIONS = ("above", "below")
 TIERS = ("core", "optional")
+ML_STATS = ("mean", "std", "min", "max", "slope", "last")   # window statistics (ml/features.py)
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,9 @@ class Sensor:
     limits_note: str | None = None
     # A reading at or past this value means "nothing in range", not a fault (HC-SR04: no echo = 400).
     out_of_range_value: float | None = None
+    # ML statistics of this sensor (features.STATS subset); None = all. Room-climate sensors
+    # use only std/slope: their absolute level is the room, not the machine (Phase 8.2).
+    ml_stats: tuple[str, ...] | None = None
     enabled_in_config: bool = True
 
     @property
@@ -74,6 +78,7 @@ class Sensor:
             "comment": self.comment,
             "limits_note": self.limits_note,
             "out_of_range_value": self.out_of_range_value,
+            "ml_stats": list(self.ml_stats) if self.ml_stats else None,
         }
 
 
@@ -181,6 +186,7 @@ class Registry:
                 "comment": raw.get("comment") or None,
                 "limits_note": raw.get("limits_note") or None,
                 "out_of_range_value": _number_or_none(raw.get("out_of_range_value"), f"{key}.out_of_range_value", warn),
+                "ml_stats": _ml_stats(raw.get("ml_stats"), key, warn),
             })
 
         # Group rule: members must agree on 'enabled', otherwise the whole group is disabled.
@@ -226,6 +232,16 @@ class Registry:
             len(sensors), [s.key for s in reg.enabled], [s.key for s in reg.ml],
         )
         return reg
+
+
+def _ml_stats(value: Any, key: str, warn) -> tuple[str, ...] | None:
+    """Optional subset of ML_STATS, in ML_STATS order; invalid -> all statistics."""
+    if value is None:
+        return None
+    if not (isinstance(value, list) and value and all(v in ML_STATS for v in value)):
+        warn(f"{key}: ml_stats must be a non-empty list from {list(ML_STATS)}; using all")
+        return None
+    return tuple(st for st in ML_STATS if st in value)
 
 
 def _hysteresis(value: Any, key: str, warn) -> float | None:

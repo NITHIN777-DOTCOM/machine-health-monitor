@@ -397,8 +397,9 @@ def test_warmstart_file_setting_on_startup(monkeypatch, tmp_path, reg):
 def test_api_model_info_and_reload(api, tmp_path):
     with api() as client:
         info = client.get("/api/model").json()
-        assert info["status"] == "READY" and info["provisional"] is True
-        assert info["trained_on"]["synthetic"] > 0 and info["trained_on"]["real"] == 0
+        # The shipped model is bench-trained on real data since Phase 8.2
+        assert info["status"] == "READY" and info["provisional"] is False
+        assert info["trained_on"]["real"] > 0 and info["trained_on"]["synthetic"] == 0
         assert info["sensors"] == ["temp_c", "humidity", "sound_peak", "vib_count"]
         assert {"median_score", "threshold_score", "abnormal_score"} <= set(info["calibration"])
         (tmp_path / "models" / "model.joblib").unlink()

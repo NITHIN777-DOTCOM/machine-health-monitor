@@ -268,6 +268,12 @@ Empty device fields stay empty in the stored file.
   excluded from ML.** Without a real motor load the INA219 only measures a constant
   bench current, which carries no information about machine health. If a real motor
   load is added later, set `include_in_ml: true` for both and retrain.
+- **Temperature and humidity enter ML by how they change, not their level** (`ml_stats:
+  ["std", "slope"]`, Phase 8.2). Their level is the room's climate: in the Phase 8.2
+  validation, warmer and drier minutes than the training minutes alone pushed health below
+  50. The temperature level is watched by the rules and the forecast. ML features are
+  therefore 16: temperature std/slope, humidity std/slope, and all six statistics of sound
+  and vibration. Changing `ml_stats` makes the model NEEDS_RETRAIN.
 - `ms` and `dev_state` are never ML features. `dev_state` is the device's rule-based
   verdict and can be compared against the ML result.
 
@@ -306,6 +312,7 @@ Fields of each sensor entry:
 | `out_of_range_value` | number, optional | A reading at or past this value means "nothing in range" (a real, clear reading). Only `distance_cm`: `400`. The dashboard shows it as "> 400 cm (clear)". |
 | `firmware_flag` | string          | Firmware only: the `USE_<SENSOR>` define generated for this sensor's module, e.g. `USE_HCSR04`. Sensors on one module share a flag (`USE_DHT11`, `USE_INA219`). |
 | `lcd_name`      | string (≤ 4)    | Firmware only: short name on the 16x2 LCD, e.g. `VIB` in `CRIT VIB 66>60`. |
+| `ml_stats`      | list, optional  | Which window statistics ML uses for this sensor (`mean`, `std`, `min`, `max`, `slope`, `last`); default all. Temperature and humidity: `["std", "slope"]` (section 6). `ml_stats_note` explains it. |
 | `comment`       | string, optional | Free-text note for humans; ignored by the software. |
 
 Current state: the four core values, the water leak sensor and the ultrasonic safety zone
