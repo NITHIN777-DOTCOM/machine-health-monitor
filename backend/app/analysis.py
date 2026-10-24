@@ -200,8 +200,10 @@ class Analyzer:
             values += [f"{hw}: no reading" for hw in faults]
         limits = [t for t in trigs if t["kind"] == "limit"]
         if limits:
-            level = "critical" if rules == "CRITICAL" else "warning"
             over = [t for t in limits if not t["in_band"]] or limits
+            # The triggers' own level, not the state's: in WARNING, a value inside the critical
+            # hysteresis band (temp 34.6, crit 35) is "near critical", not "near warning".
+            level = "critical" if any(t["level"] == "CRITICAL" for t in over) else "warning"
             names = [self._short(t["sensor"]) for t in over]
             names = [names[0]] + [n.lower() for n in names[1:]]
             directions = {t["direction"] for t in over}

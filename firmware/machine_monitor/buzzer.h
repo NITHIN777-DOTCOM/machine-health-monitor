@@ -4,22 +4,33 @@
 //   CRITICAL  200 ms on / 200 ms off, three beeps, then a 1 s pause, repeating
 //   NORMAL    silent
 // BUZZER_ENABLED 0 keeps it silent (testing); the patterns still run.
-// BUZZER_ACTIVE_LOW 1 for a low-trigger module (sounds on LOW); default 0 = sounds on HIGH.
+// BUZZER_PASSIVE 1 (default, the fitted module): a passive buzzer, driven with tone() at
+// BUZZER_FREQ_HZ; a steady level makes no sound (bench test 2026-10-24, HIL_RESULTS.md).
+// BUZZER_PASSIVE 0: an active (self-oscillating) buzzer, driven with a steady HIGH.
 //
-// Silent = the pin is an INPUT (high impedance), not driven: on the bench, holding D8 LOW
-// made the buzzer module draw a steady current that lifted every analog reading by ~20
-// counts (dry leak ~6 -> ~26, sound baseline 15 -> 35). High impedance is silent for both
-// module types (firmware/tests/test_buzzer checks which level sounds).
+// tone() uses Timer2. Nothing else in the sketch does: millis()/micros() are Timer0, D2 is
+// INT0, the watchdog and I2C (TWI) are their own hardware, pulseIn() is a counting loop.
+// While a tone plays its interrupt steals a few % of the CPU, so a pulseIn() distance taken
+// during a beep reads a few % short (firmware/README.md, Buzzer).
+//
+// Sensor blanking: the microphone hears the buzzer (sound_peak 30-39 during a beep on the
+// bench, inside the sound hysteresis band), so the sketch ignores sound samples while
+// blanking() is true: while it sounds and BLANK_MS after (HIL_RESULTS.md).
+//
+// Silent = noTone() and the pin back to INPUT (high impedance), not driven: on the bench,
+// holding D8 LOW made the buzzer module draw a steady current that lifted every analog
+// reading by ~20 counts (dry leak ~6 -> ~26, sound baseline 15 -> 35).
 #pragma once
 
 #include <Arduino.h>
 
 class Buzzer {
  public:
-  void begin(uint8_t pin, bool enabled, bool activeLow) {
+  void begin(uint8_t pin, bool enabled, bool passive, uint16_t freqHz) {
     pin_ = pin;
     enabled_ = enabled;
-    activeLow_ = activeLow;
+    passive_ = passive;
+    freqHz_ = freqHz;
     digitalWrite(pin_, LOW);
     pinMode(pin_, INPUT);
   }
@@ -35,6 +46,11 @@ class Buzzer {
     critical_ = on;
   }
 
+  // True while the buzzer sounds and for BLANK_MS after it stops (sensor blanking).
+  bool blanking(uint32_t now) const {
+    return pinOn_ || now - offAt_ < BLANK_MS;
+  }
+
   void tick(uint32_t now) {
     bool on = false;
     if (critical_) {
@@ -47,12 +63,16 @@ class Buzzer {
     }
     on = on && enabled_;
     if (on != pinOn_) {
-      if (on) {
-        digitalWrite(pin_, activeLow_ ? LOW : HIGH);
+      if (on && passive_) {
+        tone(pin_, freqHz_);                 // sets the pin to OUTPUT itself
+      } else if (on) {
+        digitalWrite(pin_, HIGH);
         pinMode(pin_, OUTPUT);
       } else {
+        if (passive_) noTone(pin_);          // stops Timer2, leaves the pin OUTPUT LOW
         pinMode(pin_, INPUT);                // high impedance, see above
         digitalWrite(pin_, LOW);             // and no pull-up
+        offAt_ = now;
       }
       pinOn_ = on;
     }
@@ -60,12 +80,15 @@ class Buzzer {
 
  private:
   static const uint16_t CRIT_CYCLE_MS = 3 * 400 + 1000;
+  static const uint16_t BLANK_MS = 50;      // the beep's tail and the sound module settling
   uint8_t pin_ = 0;
   bool enabled_ = true;
-  bool activeLow_ = false;
+  bool passive_ = true;
+  uint16_t freqHz_ = 2500;
   bool critical_ = false;
   bool pinOn_ = false;
   uint32_t critStart_ = 0;
   uint32_t beepStart_ = 0;
   uint16_t beepMs_ = 0;
+  uint32_t offAt_ = 0;
 };

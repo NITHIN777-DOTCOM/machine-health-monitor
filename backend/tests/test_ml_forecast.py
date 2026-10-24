@@ -92,7 +92,7 @@ def test_only_enabled_forecast_sensors_with_limits():
 
 
 def test_registry_forecast_flags(registry):
-    assert [s.key for s in forecast_sensors(registry)] == ["temp_c", "humidity"]
+    assert [s.key for s in forecast_sensors(registry)] == ["temp_c"]   # humidity: no limits since Phase 7.2
 
 
 @pytest.mark.parametrize("seconds, text", [

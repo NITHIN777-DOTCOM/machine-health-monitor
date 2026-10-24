@@ -1,9 +1,10 @@
 // Buzzer polarity test: which D8 level makes the module sound?
 // Repeats: 2 s OUTPUT HIGH, 2 s high impedance, 2 s OUTPUT LOW, 2 s high impedance, and
 // prints the current step at 115200 baud.
-//   sounds on HIGH -> keep BUZZER_ACTIVE_LOW 0 in machine_monitor.ino (default)
-//   sounds on LOW  -> set  BUZZER_ACTIVE_LOW 1
-// Neither: a passive buzzer (needs tone()) or a wiring fault. Results: firmware/tests/RESULTS.md.
+//   sounds on HIGH -> an active buzzer: set BUZZER_PASSIVE 0 in machine_monitor.ino
+//   neither        -> a passive buzzer (needs tone()): keep BUZZER_PASSIVE 1 (default), or a
+//                     wiring fault. The fitted module is passive (HIL 2026-10-24).
+// Results: firmware/tests/RESULTS.md and HIL_RESULTS.md.
 
 const uint8_t PIN_BUZZER = 8;
 

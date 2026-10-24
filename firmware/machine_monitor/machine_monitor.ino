@@ -30,12 +30,15 @@
 #endif
 
 // ---- user settings ----------------------------------------------------------------------
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.0.2"
 #ifndef BUZZER_ENABLED
 #define BUZZER_ENABLED 1       // 0 = silent (testing); patterns and LCD still run
 #endif
-#ifndef BUZZER_ACTIVE_LOW
-#define BUZZER_ACTIVE_LOW 0    // 1 = the module sounds on LOW (check with firmware/tests/test_buzzer)
+#ifndef BUZZER_PASSIVE
+#define BUZZER_PASSIVE 1       // 1 = passive buzzer, driven with tone() (the fitted module); 0 = active, steady HIGH
+#endif
+#ifndef BUZZER_FREQ_HZ
+#define BUZZER_FREQ_HZ 2500    // tone pitch for a passive buzzer (clearly audible at 2-2.7 kHz)
 #endif
 // Optional: power the leak sensor from this pin only while reading (less corrosion by
 // electrolysis). Not used now: the sensor's + is wired to 5V. To use it, move the sensor's
@@ -122,8 +125,9 @@ static const __FlashStringHelper* stateName(uint8_t s) {
 
 // ---- sensors -----------------------------------------------------------------------------
 
-static void soundSample() {
+static void soundSample(uint32_t now) {
 #if USE_SOUND
+  if (buzzer.blanking(now)) return;      // sensor blanking: the mic would hear our own beep
   int s = analogRead(PIN_SOUND);
   int base = (int)(soundBase >> SOUND_EMA_SHIFT);
   uint16_t dev = (uint16_t)abs(s - base);
@@ -330,7 +334,7 @@ void setup() {
   wdt_disable();
   Serial.begin(115200);
   Serial.println(F("# fw machine_monitor v" FW_VERSION));
-  buzzer.begin(PIN_BUZZER, BUZZER_ENABLED, BUZZER_ACTIVE_LOW);
+  buzzer.begin(PIN_BUZZER, BUZZER_ENABLED, BUZZER_PASSIVE, BUZZER_FREQ_HZ);
 
   bool lcd = display.begin();
   display.showP(PSTR("Machine Monitor"), PSTR("Calibrating..."));
@@ -390,8 +394,8 @@ void loop() {
   uint32_t now = millis();
   wdt_reset();
 
-  soundSample();
-  buzzer.tick(now);
+  buzzer.tick(now);                      // first, so soundSample() sees the current buzzer state
+  soundSample(now);
 
   uint32_t phase = now - lastTick;
   if (phase >= TICK_MS) {

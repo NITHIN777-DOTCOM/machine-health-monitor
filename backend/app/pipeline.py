@@ -40,6 +40,7 @@ class Pipeline:
         # exactly; for live rows it explains the device's state (reason, hold timer).
         self.device = DeviceStateMachine(state.registry, state.settings.hold_seconds)
         self.device_reported: str | None = None
+        self._last_ms: int | None = None    # device clock of the last row (reset detection)
         # Link debounce: a source counts as connected while it is starting up (grace period)
         # or while rows keep arriving; only grace seconds without data mean "disconnected".
         self._started_at = time.monotonic()
@@ -89,6 +90,7 @@ class Pipeline:
         self.state.history.clear()
         self.device.reset()
         self.device_reported = None
+        self._last_ms = None
         self.analyzer.reset()
         if warmstart_file:
             self.warm_start(warmstart_file)
@@ -147,6 +149,12 @@ class Pipeline:
 
     def process(self, row: SensorRow) -> dict:
         """Device-state mirror, then features + ML score + forecast -> the row's analysis block."""
+        if row.ms is not None and self._last_ms is not None and row.ms < self._last_ms:
+            # The device restarted (USB replug, reset button, watchdog): its state machine
+            # starts again at NORMAL, so the mirror must too (HIL 2026-10-24: the mirror kept
+            # CRITICAL for 11 rows after a replug).
+            self.device.reset()
+        self._last_ms = row.ms if row.ms is not None else self._last_ms
         self.device.update(row.values)
         self.device_reported = row.dev_state
         return self.analyzer.update(row, self.device_status())

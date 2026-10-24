@@ -34,9 +34,9 @@
 // Limits: {warn, critical, hysteresis, flags}. Tier core/optional = RULE_CORE.
 static const SensorRule SENSOR_RULES[8] = {
   {32.0f, 35.0f, 0.5f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_CORE | RULE_ENABLED},  // temp_c (core)
-  {80.0f, 90.0f, 3.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_CORE | RULE_ENABLED},  // humidity (core)
+  {0.0f, 0.0f, 0.0f, RULE_CORE | RULE_ENABLED},  // humidity (core)
   {40.0f, 120.0f, 10.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_CORE | RULE_ENABLED},  // sound_peak (core)
-  {20.0f, 60.0f, 5.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_CORE | RULE_ENABLED},  // vib_count (core)
+  {50.0f, 100.0f, 10.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_CORE | RULE_ENABLED},  // vib_count (core)
   {50.0f, 200.0f, 20.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_ENABLED},  // leak_raw (optional)
   {20.0f, 10.0f, 3.0f, RULE_HAS_WARN | RULE_HAS_CRIT | RULE_BELOW | RULE_ENABLED},  // distance_cm (optional)
   {0.0f, 0.0f, 0.0f, 0},  // current_ma (optional)

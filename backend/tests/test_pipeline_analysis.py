@@ -94,7 +94,7 @@ def test_ml_unavailable_on_sensor_fault(reg, scorer):
     assert late[-1]["headline"] == "Sensor fault: DHT11" and late[-1]["headline_detail"] == "DHT11: no reading"
     # The forecast says "no data" from the first missing row, not "stable" from old readings.
     assert out[start]["forecast"]["temp_c"]["status"] == "no_data"
-    assert all(a["forecast"][k]["status"] == "no_data" for a in late for k in ("temp_c", "humidity"))
+    assert all(a["forecast"][k]["status"] == "no_data" for a in late for k in ("temp_c",))
 
 
 def test_no_model(reg):
@@ -134,11 +134,11 @@ def test_ml_anomaly_alone_is_only_warning(reg, scorer):
 
 
 def test_rules_and_ml_together(reg, scorer):
-    rows = sim_rows(reg, "normal", 20, 4) + vib_rows(reg, 15, 90, start_ms=20_000, dev_state="CRITICAL")
+    rows = sim_rows(reg, "normal", 20, 4) + vib_rows(reg, 15, 150, start_ms=20_000, dev_state="CRITICAL")
     a = Rig(reg, scorer).feed(rows)[-1]
     assert a["overall"] == "CRITICAL" and a["alert_source"] == "both"
     assert a["headline"] == "Vibration above critical limit"
-    assert "crit limit 60" in a["headline_detail"] and "ML anomaly (health" in a["headline_detail"]
+    assert "crit limit 100" in a["headline_detail"] and "ML anomaly (health" in a["headline_detail"]
 
 
 def test_overall_never_critical_from_ml_in_any_scenario(reg, scorer):
@@ -157,9 +157,23 @@ def test_safety_zone_headline_says_below_and_mixed_says_past(reg, scorer):
     a = Rig(reg, scorer).feed(rows)[-1]
     assert a["device"]["state"] == "CRITICAL" and a["headline"] == "Safety zone below critical limit"
     assert "Safety zone 8, crit limit 10" in a["headline_detail"]
-    rows[-1].values.update(vib_count=70.0)
+    rows[-1].values.update(vib_count=150.0)
     a = Rig(reg, scorer).feed(rows)[-1]
     assert a["headline"] == "Vibration and safety zone past critical limits"
+
+
+def test_warning_inside_critical_band_says_near_critical(reg, scorer):
+    # Bench 2026-10-24: temp rising 32.3 -> 34.7 stayed WARNING (34.5..35 is the critical
+    # hysteresis band); the headline said "near warning limit" for a value far above it.
+    rows = sim_rows(reg, "normal", 20, 4)
+    rows[-2].values.update(temp_c=33.0)
+    rows[-2].dev_state = "WARNING"
+    rows[-1].values.update(temp_c=34.7)
+    rows[-1].dev_state = "WARNING"
+    a = Rig(reg, scorer).feed(rows)[-1]
+    assert a["device"]["state"] == "WARNING"
+    assert a["headline"] == "Temperature near critical limit"
+    assert "Temperature 34.7, holding near crit limit 35" in a["headline_detail"]
 
 
 def test_safety_zone_clear_reading_is_normal(reg, scorer):

@@ -47,7 +47,7 @@ behind it is disabled or not fitted; the field is then empty.
 |---|---------------|---------|----------|----------------------------|---------|
 | 1 | `ms`          | integer | ms       | `millis()`                 | Time since boot. Wraps after ~49.7 days. Never empty. |
 | 2 | `temp_c`      | 1 dp    | °C       | DHT11 (A0)                 | Air temperature. |
-| 3 | `humidity`    | 1 dp    | %RH      | DHT11 (A0)                 | Relative humidity. |
+| 3 | `humidity`    | 1 dp    | %RH      | DHT11 (A0)                 | Relative humidity. No rule limits (see below); used by ML. |
 | 4 | `sound_peak`  | integer | counts   | Sound module (A2)          | Peak deviation from a running baseline during the last second. Quiet room ≈ 3–5; claps 60–590. |
 | 5 | `vib_count`   | integer | edges/s  | SW-420 / HW-072 (D2, interrupt) | Interrupt edges counted in the last second. Still = 0; taps 5–40; knocks 100+. |
 | 6 | `leak_raw`    | integer | 0–1023   | Water leak sensor (A1)     | Raw ADC value; higher = wetter. Dry 4–9, wet 240–576. *Optional.* |
@@ -142,9 +142,8 @@ Hysteresis margins (`hysteresis` in the registry):
 | Sensor | `h` | Example |
 |---|---|---|
 | `temp_c` | 0.5 °C | CRITICAL at 35.0 → must fall below 34.5 for 5 s to drop to WARNING |
-| `humidity` | 3 %RH | WARNING at 80 → must fall below 77 for 5 s to drop to NORMAL |
 | `sound_peak` | 10 | CRITICAL at 120 → must stay below 110 for 5 s |
-| `vib_count` | 5 /s | WARNING at 20 → must stay below 15 for 5 s |
+| `vib_count` | 10 /s | WARNING at 50 → must stay below 40 for 5 s |
 | `leak_raw` | 20 | CRITICAL at 200 → must stay below 180 for 5 s |
 | `distance_cm` | 3 cm | `below`: WARNING at 20 → must stay **above** 23 for 5 s |
 | INA219 (`current_ma`, `bus_v`) | `null` (= 0) | limits TBD (not fitted) |
@@ -194,16 +193,21 @@ against it (parity test, see `firmware/README.md`). `GET /api/status` and every 
 | Sensor       | WARNING at | CRITICAL at |
 |--------------|-----------|-------------|
 | `temp_c`     | ≥ 32 °C   | ≥ 35 °C     |
-| `humidity`   | ≥ 80 %RH  | ≥ 90 %RH    |
+| `humidity`   | none      | none        |
 | `sound_peak` | ≥ 40      | ≥ 120       |
-| `vib_count`  | ≥ 20 /s   | ≥ 60 /s     |
+| `vib_count`  | ≥ 50 /s   | ≥ 100 /s    |
 | `leak_raw`   | ≥ 50      | ≥ 200       |
 | `distance_cm`| **≤** 20 cm | **≤** 10 cm |
 | `current_ma` | TBD       | TBD         |
 | `bus_v`      | TBD       | TBD         |
 
-**All limits are provisional demo limits** (each has a `limits_note` in the registry). They are low on purpose so a live bench demo can trigger them: a finger on the
-DHT11 gives about 32–33 °C (WARNING), a few taps pass 20 vibration edges/s, and a clap
+**Humidity has no rule limits** (Phase 7.2): it is not a machine-fault signal, room humidity in
+Chennai sits around 80 %RH (the bench sat in WARNING all day with the old 80 % limit) and the
+DHT11 only measures up to 90 %RH. It stays enabled, on the dashboard and in ML; a DHT11 read
+failure still raises WARNING through the sensor-fault rule (temp_c and humidity share the module).
+
+**All other limits are provisional demo limits** (each has a `limits_note` in the registry). They are low on purpose so a live bench demo can trigger them: a finger on the
+DHT11 gives about 32–33 °C (WARNING), firm knocks pass 50 vibration edges/s (light taps stay below; very hard knocks pass 100, bench-calibrated in Phase 7.2), and a clap
 passes a sound peak of 40, a wet finger on the leak sensor gives 240+, and a hand within
 10 cm of the ultrasonic sensor is CRITICAL. They will be retuned from real recordings in
 Phase 8. The numbers live only in `backend/config/sensors.json` (`warn` / `critical` /
@@ -295,7 +299,7 @@ Fields of each sensor entry:
 | `tier`          | `core` / `optional` | Core sensors must work in the final build; optional ones may be left out. |
 | `enabled`       | boolean         | Whether this sensor is fitted in the current build. `false` → dashboard shows "not connected". |
 | `include_in_ml` | boolean         | Whether this sensor is used as an ML feature (only when also enabled; see section 6). |
-| `forecast`      | boolean         | Whether the backend shows a time-to-limit trend forecast for this sensor. `true` for slow signals (temperature, humidity); `false` for spiky event signals (sound, vibration), where a straight-line trend misleads. |
+| `forecast`      | boolean         | Whether the backend shows a time-to-limit trend forecast for this sensor. `true` for slow signals with limits (temperature); `false` for humidity (no limits to forecast) and for spiky event signals (sound, vibration), where a straight-line trend misleads. |
 | `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
 | `hysteresis`    | number or null  | De-escalation margin `h` (section 3): to leave a level, the value must be clear of the limit by `h`, in the limit's direction. `null` = no margin. |
 | `limits_note`   | string, optional | Where the limits come from, e.g. "provisional demo limit - retune from real data in Phase 8". The dashboard can show it next to the limits. |
@@ -374,7 +378,7 @@ so they remain clean training data and the analysis can always be recomputed.
 
   | Situation | `headline` | `headline_detail` |
   |---|---|---|
-  | Rule limits | "Sound level and vibration above critical limits" | "Sound level 143, crit limit 120 · Vibration 64, crit limit 60 · ML anomaly (health 0)" |
+  | Rule limits | "Sound level and vibration above critical limits" | "Sound level 143, crit limit 120 · Vibration 140, crit limit 100 · ML anomaly (health 0)" |
   | Core sensor empty | "Sensor fault: DHT11" | "DHT11: no reading" |
   | ML only | "Unusual vibration pattern (health 34)" | "Vibration: far above normal" |
   | ML clearing | "Back to normal; ML anomaly clearing in 4 s" | "Health 90" |

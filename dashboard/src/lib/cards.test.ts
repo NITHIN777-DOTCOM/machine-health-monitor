@@ -48,11 +48,11 @@ describe("buildSensorCards", () => {
   });
 
   it("gives each card its own level and limits text", () => {
-    const { cards } = buildSensorCards(registry, row({ temp_c: 33, humidity: 91, sound_peak: 4, vib_count: 64 }));
+    const { cards } = buildSensorCards(registry, row({ temp_c: 33, humidity: 91, sound_peak: 4, vib_count: 120 }));
     const by = Object.fromEntries(cards.map((c) => [c.key, c]));
     expect(by.temp_c!.level).toBe("WARNING");
-    expect(by.humidity!.level).toBe("CRITICAL");
-    expect(by.vib_count!.level).toBe("CRITICAL");
+    expect(by.humidity!).toMatchObject({ level: "NORMAL", limits: "no limits set" });   // no rule limits since Phase 7.2
+    expect(by.vib_count!.level).toBe("CRITICAL");                  // crit 100 since Phase 7.2
     expect(by.temp_c!.limits).toBe("warn ≥ 32 · crit ≥ 35 °C");
   });
 

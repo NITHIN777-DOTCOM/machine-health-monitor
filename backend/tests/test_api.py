@@ -68,7 +68,7 @@ def test_history(client):
     compact = rows[-1]["analysis"]
     assert set(compact) == {"overall", "alert_source", "ml_status", "health", "forecast"}
     assert compact["ml_status"] == "OK" and compact["health"] is not None      # trend-chart data
-    assert set(compact["forecast"]) == {"temp_c", "humidity"}
+    assert set(compact["forecast"]) == {"temp_c"}          # humidity has no limits (Phase 7.2)
     full = client.get("/api/history?seconds=600&detail=full").json()["rows"][-1]["analysis"]
     assert {"headline", "device", "ml", "forecast"} <= set(full)
     plain = client.get("/api/history?seconds=600&detail=none").json()["rows"][-1]
@@ -269,3 +269,22 @@ def test_a_good_row_resets_the_rejected_count(client, registry):
     switch_to_lines(client, ["garbage", good])
     s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "no_data" and s)
     assert s["rejected_recent"] == 0 and s["rejecting"] is False
+
+
+def test_mirror_resets_when_the_device_clock_restarts(client):
+    """A replug or reset restarts the device at NORMAL; the mirror must not keep its old level."""
+    from helpers import sim_rows
+    pipeline = main.app.state.pipeline
+    reg = main.app.state.mhm.registry
+    rows = sim_rows(reg, "normal", 3, 1)
+    rows[-1].values.update(vib_count=200.0)
+    rows[-1].dev_state = "CRITICAL"
+    for r in rows:
+        pipeline.process(r)
+    assert pipeline.device.state == "CRITICAL"
+    after = sim_rows(reg, "normal", 2, 2)
+    for i, r in enumerate(after):
+        r.ms = 1000 * (i + 1)                        # clock went backwards: the board restarted
+        r.dev_state = "NORMAL"
+        a = pipeline.process(r)
+    assert pipeline.device.state == "NORMAL" and a["device"]["agrees"] is True

@@ -21,14 +21,14 @@ so docs and UI text must be clear to a newcomer.
 | `backend/config/sim_profile.json` | Simulator baselines + scenarios |
 | `backend/app/` | `main.py` (API + dashboard at `/`), `launcher.py` (exe entry), `paths.py` (frozen vs repo paths), `version.py`, `pipeline.py`, `analysis.py` (live ML/overall/headline), `device_rules.py`, `registry.py`, `models.py`, `recorder.py`, `state.py`, `sources/` (simulator, serial_source, replay), `ml/` (features, training, scorer, forecast, evaluation, dataset, jobs) |
 | `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `make_demo_recording.py`, `train.py`, `evaluate.py`, `gen_firmware_config.py` (sensors.json + settings.json → `config_generated.h`), `firmware_parity.py` (board vs device_rules.py), `run_tests.bat` |
-| `backend/tests/` | pytest suite (329 tests), `helpers.py`, `conftest.py` |
+| `backend/tests/` | pytest suite (331 tests), `helpers.py`, `conftest.py` |
 | `build.bat`, `packaging/` | Portable build: `MachineHealthMonitor.spec` (onedir), `build_release.py` (version.json, assemble + zip), `Start.bat`, `Start (simulator only).bat`, `QUICK_START.txt`. `backend/mhm_entry.py` = PyInstaller stub, `backend/requirements-build.txt` pins PyInstaller |
 | `release/`, `build_test/`, `logs/`, `data/demo/` | Build output, portability-test copies, runtime logs, generated demo recording (all gitignored) |
 | `dashboard/` | Vite + React 19 + TS (strict) + Recharts. `src/types.ts` mirrors the backend JSON; `src/lib/` pure helpers (Vitest); `scripts/screenshots.mjs` (Playwright, project-local Chromium). See `dashboard/README.md` |
 | `docs/screenshots/phase5/` | Review screenshots (committed; `npm run screenshots`) |
 | `docs/phase5_report.md` | Phase 5 report (redesign, health curve, controls, decisions) |
-| `firmware/` | `README.md` (pins, defines, LCD/buzzer, watchdog, parity, memory, libraries), `machine_monitor/` (v1.0.0: `.ino`, `config_generated.h` GENERATED, `state_machine.h`, `display.h`, `buzzer.h`), `tests/` (single-sensor sketches + `RESULTS.md`), `build/` (gitignored) |
-| `data/recordings/` | Real recordings (committed). `data/synthetic/` is gitignored, regenerate it |
+| `firmware/` | `README.md` (pins, defines, LCD/buzzer, watchdog, parity, memory, libraries), `machine_monitor/` (v1.0.2: `.ino`, `config_generated.h` GENERATED, `state_machine.h`, `display.h`, `buzzer.h`), `tests/` (single-sensor sketches, `RESULTS.md`, `HIL_RESULTS.md` = Phase 7.2 bench test), `build/` (gitignored) |
+| `data/recordings/` | Real recordings (committed): `real_session_01_20261024.csv` (Phase 7.2 HIL, 3408 rows, 868 normal / 686 fault / 1854 unknown). `data/synthetic/` is gitignored, regenerate it |
 | `models/` | `model.joblib` + `model_meta.json` (committed, PROVISIONAL) |
 | `docs/eval/` | Eval reports; `*_SIMULATED.md` are gitignored |
 
@@ -84,16 +84,17 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   HC-SR04 (D9/D10) **enabled** (Phase 7.1); INA219 `enabled: false` (not fitted; `group: ina219` → current_ma +
   bus_v toggle together; a mismatched group is disabled with a warning).
 - ML sensors = `enabled AND include_in_ml` = the 4 core values only (leak/distance are rule-only events,
-  current_ma/bus_v excluded), so the shipped model still matches (test). `forecast: true` only for temp_c, humidity.
-- **Demo limits are provisional** (`limits_note`, retune in Phase 8): temp 32/35, humidity 80/90,
-  sound 40/120, vibration 20/60, leak 50/200 (h 20), all "above"; **distance_cm = safety zone, "below"
+  current_ma/bus_v excluded), so the shipped model still matches (test). `forecast: true` only for temp_c (humidity has no limits).
+- **Demo limits are provisional** (`limits_note`, retune in Phase 8): temp 32/35, sound 40/120,
+  vibration 50/100 (h 10, bench-calibrated in 7.2), leak 50/200 (h 20), all "above"; **humidity has no
+  rule limits** (Chennai room ~80 %RH, DHT11 tops out at 90; still shown and in ML); **distance_cm = safety zone, "below"
   20/10 (h 3)**. HC-SR04 no echo = **400** (nothing in range, clear; `out_of_range_value`, dashboard
   "> 400 cm (clear)"); empty distance = sensor fault.
 - **Limits are single-source:** sensors.json/settings.json → `scripts/gen_firmware_config.py` →
   `firmware/machine_monitor/config_generated.h` (also `USE_<SENSOR>` from `firmware_flag`, LCD names from
   `lcd_name`). Re-run it after any limit/enabled change; `test_firmware_config.py` fails while it's stale.
 - dev_state: escalation immediate; de-escalation needs value clear by `hysteresis`
-  (temp 0.5, hum 3, sound 10, vib 5, leak 20, dist 3) for **hold_seconds = 5** consecutive rows, one level at a
+  (temp 0.5, sound 10, vib 10, leak 20, dist 3) for **hold_seconds = 5** consecutive rows, one level at a
   time. An enabled core sensor empty → at least WARNING. Tests parse both worked examples in DATA_CONTRACT.md
   (temp above, distance below); `firmware_parity.py` checks the board against them (71/71 on 2026-10-24).
 - **ML is advisory:** an ANOMALY can raise overall to WARNING, **never CRITICAL**; only rules make CRITICAL.
@@ -130,18 +131,21 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   source/scenario/speed, Record/Stop + label, Replay with progress, warm start) → 6 (portable onedir exe,
   launcher, FastAPI serves the dashboard, paths.py, build.bat, demo recording, GitHub release v0.6.0).
   → 7.1 (final firmware v1.0.0, generated config, parity test, leak + safety zone enabled, dashboard
-  silent vs wrong-format notice).
-- Next: 7.2 (then rebuild the release), 8 real data + retrain + retune limits, 9 release + docs.
+  silent vs wrong-format notice) → 7.2 (hardware-in-the-loop test, first real recording, passive
+  buzzer `tone()` + sound blanking = firmware v1.0.2, vibration 50/100, humidity without limits,
+  mirror reset on device restart; `firmware/tests/HIL_RESULTS.md`).
+- Next: rebuild the release, 8 real data + retrain + retune limits, 9 release + docs.
 
 ## Known open items
 - Dashboard "recovering" rule (done in Phase 4, `dashboard/src/lib/format.ts`): the banner says "Recovering"
   only when `hold_remaining_s <= hold_seconds - 2` (and says "rules clear ...; ML anomaly still active" if ML
   still flags it); otherwise it strips the backend's "recovering, was:" prefix. The device card shows the hold countdown quietly.
-- `machine_monitor` v1.0.0 is on the Uno. Live run 2026-10-24: rows_rejected 0, `agrees` true on every row.
-  The room's humidity (80–84 %) is at/over the provisional 80 % warn limit, so the bench sits in WARNING.
-- **Buzzer polarity unconfirmed:** D8 LOW draws current (and shifted all analog readings ~20 counts, so silent =
-  high impedance now); no tone detected by the mic in any state. Run `firmware/tests/test_buzzer` by ear; set
-  `BUZZER_ACTIVE_LOW 1` if it sounds on LOW.
+- `machine_monitor` v1.0.2 is on the Uno. HIL 2026-10-24: rows_rejected 0; `agrees` false only on 15 rows right
+  after reconnects (mirror now resets when the device clock goes backwards).
+- **The buzzer is passive** (`BUZZER_PASSIVE 1`, `tone()` 2.5 kHz, Timer2). Silent = pin INPUT (driving D8 LOW
+  shifted analog readings ~20 counts). The mic hears it, so sound samples are blanked while it sounds + 50 ms.
+- **Demo: tap the vibration sensor itself, not the table** (a knock is also loud and shakes the breadboard);
+  reach from the side, not over the HC-SR04. Loose 5V/GND jumpers caused USB drops + LCD garbage on the bench.
 - Live ML shows ANOMALY on real bench data (model is synthetic-only, provisional): expected until Phase 8.
 - The portable release still has the empty firmware folder: rebuild after Phase 7.2.
 - The exe is unsigned: SmartScreen "More info → Run anyway" on first start (documented in QUICK_START.txt).

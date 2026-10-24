@@ -28,12 +28,13 @@ Same bench, read with `arduino-cli`/pyserial at 115200 baud.
 | `machine_monitor`, leak dry (62 s live run) | 3–8 (mean 5.9). Before the buzzer-pin fix it read 24–28: holding D8 LOW lifted every analog reading by ~20 counts (see firmware README, Buzzer). |
 | `test_ultrasonic` vs `machine_monitor`, same object | 24.7–24.8 cm vs 23.8–25.9 cm (`machine_monitor` uses the same `pulseIn()` measurement) |
 | Sound, quiet room (`machine_monitor`) | baseline 15, peak deviation 1–4 |
-| Buzzer, microphone check (`test_buzzer` levels) | D8 HIGH and high impedance: no current, A2 flat. D8 LOW: steady current (A2 and A1 +20 counts) but no tone the microphone picks up. **Which level sounds is still to be confirmed by ear** with `test_buzzer/`. |
+| Buzzer, microphone check (`test_buzzer` levels) | D8 HIGH and high impedance: no current, A2 flat. D8 LOW: steady current (A2 and A1 +20 counts) but no tone the microphone picks up. **Resolved in Phase 7.2:** the module is a **passive** buzzer, it sounds only with `tone()` (see [HIL_RESULTS.md](HIL_RESULTS.md)). |
 | Parity test (`backend/scripts/firmware_parity.py`) | 71/71 rows match `device_rules.py` (both worked examples + 32-row multi-sensor sequence) |
 | Watchdog / timing | `loop_max_ms` 23–25 (DHT11 read), `free_ram` 1032 B, 128 lines in 128 s |
 
 ## Still to test
 
-- Buzzer polarity by ear (`test_buzzer/`), then the CRITICAL pattern and WARNING chirp.
+- ~~Buzzer polarity by ear~~: passive buzzer, `tone()` build v1.0.2 confirmed by ear (boot beep,
+  WARNING chirp, CRITICAL pattern) in the [hardware-in-the-loop test](HIL_RESULTS.md).
 - Leak with `LEAK_POWER_PIN` (needs the + wire moved to D7).
 - INA219 (not fitted).

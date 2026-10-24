@@ -21,7 +21,7 @@
       "start_s": [20, 60],
       "label_after_start": "fault",
       "effects": {
-        "vib_count":  {"add": 60,  "noise": 15},
+        "vib_count":  {"add": 130, "noise": 25},
         "sound_peak": {"add": 120, "noise": 40}
       }
     },
@@ -50,7 +50,7 @@
       "duration_s": 30,
       "label_after_start": "fault",
       "effects": {
-        "vib_count":  {"add": 75,  "noise": 8},
+        "vib_count":  {"add": 140, "noise": 10},
         "sound_peak": {"add": 150, "noise": 15}
       }
     },
