@@ -88,8 +88,11 @@ def test_feature_list_is_registry_driven(make_registry, registry):
         for s in d["sensors"]:
             s["enabled"] = True
     keys = ml_sensor_keys(make_registry(enable_all))
-    assert "leak_raw" in keys and "distance_cm" in keys
-    assert "current_ma" not in keys and "bus_v" not in keys        # include_in_ml: false
+    assert keys == ["temp_c", "humidity", "sound_peak", "vib_count"]   # the others are include_in_ml: false
+
+    def leak_into_ml(d):
+        next(s for s in d["sensors"] if s["key"] == "leak_raw")["include_in_ml"] = True
+    assert "leak_raw" in ml_sensor_keys(make_registry(leak_into_ml))
 
     def drop_humidity(d):
         next(s for s in d["sensors"] if s["key"] == "humidity")["include_in_ml"] = False

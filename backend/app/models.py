@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Mapping
@@ -92,10 +93,14 @@ class ParseStats:
     rejected: int = 0
     comments: int = 0
     last_reject_reason: str | None = None
+    last_rejected_line: str | None = None   # shortened, printable ASCII only (for the dashboard)
+    last_reject_at: float | None = None     # time.monotonic() of the last rejection
 
     def reject(self, reason: str, line: str) -> None:
         self.rejected += 1
         self.last_reject_reason = reason
+        self.last_rejected_line = "".join(c if " " <= c <= "~" else "?" for c in line[:80])
+        self.last_reject_at = time.monotonic()
         log.warning("Rejected line (%d rejected so far): %s: %r", self.rejected, reason, line[:120])
 
 

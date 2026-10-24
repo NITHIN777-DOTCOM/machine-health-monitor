@@ -50,8 +50,8 @@ behind it is disabled or not fitted; the field is then empty.
 | 3 | `humidity`    | 1 dp    | %RH      | DHT11 (A0)                 | Relative humidity. |
 | 4 | `sound_peak`  | integer | counts   | Sound module (A2)          | Peak deviation from a running baseline during the last second. Quiet room ≈ 3–5; claps 60–590. |
 | 5 | `vib_count`   | integer | edges/s  | SW-420 / HW-072 (D2, interrupt) | Interrupt edges counted in the last second. Still = 0; taps 5–40; knocks 100+. |
-| 6 | `leak_raw`    | integer | 0–1023   | Water leak sensor (A1)     | Raw ADC value; higher = wetter. *Optional.* |
-| 7 | `distance_cm` | 1 dp    | cm       | HC-SR04 (D9 Trig / D10 Echo) | Echo distance. Out of range / no echo = empty. *Optional.* |
+| 6 | `leak_raw`    | integer | 0–1023   | Water leak sensor (A1)     | Raw ADC value; higher = wetter. Dry 4–9, wet 240–576. *Optional.* |
+| 7 | `distance_cm` | 1 dp    | cm       | HC-SR04 (D9 Trig / D10 Echo) | **Safety zone**: distance to the nearest person/object. **`400` = no echo, nothing in range (clear)**; empty = sensor fault. *Optional.* |
 | 8 | `current_ma`  | 1 dp    | mA       | INA219 (I2C 0x40)          | Load current. *Optional.* |
 | 9 | `bus_v`       | 2 dp    | V        | INA219 (I2C 0x40)          | Bus voltage. *Optional.* |
 | 10 | `dev_state`  | enum    | –        | computed on the Arduino    | `NORMAL`, `WARNING` or `CRITICAL`. Never empty. |
@@ -65,6 +65,12 @@ behind it is disabled or not fitted; the field is then empty.
 
 `0` is a real reading (for example, no vibration), so it must never mean "no data". The
 backend turns empty fields into "no value" (`None`/`null`), never into 0.
+
+**One special value that is a real reading, not a placeholder: `distance_cm = 400`.** The
+HC-SR04 gives no echo when nothing is within its range (about 4 m), which is the *good*
+case for a safety zone. The firmware then reports `400` (the sensor's maximum range), so it
+counts as clear; the dashboard shows it as "> 400 cm (clear)" (`out_of_range_value` in the
+registry). An empty `distance_cm` still means a genuine fault (sensor not answering).
 
 The backend tells the two cases apart using the sensor registry (section 6):
 
@@ -88,7 +94,8 @@ Two things can raise the state:
 
 Each limit has a direction (`direction` in the registry, section 7): `above` means a
 value at or above the limit is bad; `below` means a value at or below the limit is bad.
-All limits below are `above`.
+Every limit is `above` except the safety zone `distance_cm`, which is `below` (a person or
+object **closer** than the limit is bad).
 
 #### State diagram
 
@@ -138,7 +145,9 @@ Hysteresis margins (`hysteresis` in the registry):
 | `humidity` | 3 %RH | WARNING at 80 → must fall below 77 for 5 s to drop to NORMAL |
 | `sound_peak` | 10 | CRITICAL at 120 → must stay below 110 for 5 s |
 | `vib_count` | 5 /s | WARNING at 20 → must stay below 15 for 5 s |
-| optional sensors | `null` (= 0) | limits TBD |
+| `leak_raw` | 20 | CRITICAL at 200 → must stay below 180 for 5 s |
+| `distance_cm` | 3 cm | `below`: WARNING at 20 → must stay **above** 23 for 5 s |
+| INA219 (`current_ma`, `bus_v`) | `null` (= 0) | limits TBD (not fitted) |
 
 #### Worked example (`temp_c`, warn 32, critical 35, h 0.5, hold 5)
 
@@ -153,9 +162,32 @@ Hysteresis margins (`hysteresis` in the registry):
 | 14–18 | 31.0 | `WARNING` → `NORMAL` at row 18 | D2: a separate 5-row hold |
 | 19 | empty | `WARNING` | E1: core sensor fault |
 
+#### Worked example 2 (`distance_cm`, direction below, warn 20, critical 10, h 3, hold 5)
+
+The same rules mirrored for a `below` limit: "reaches" means value ≤ limit, and "clear by
+`h`" means value > limit + h.
+
+| Row | distance_cm | State | Why |
+|---|---|---|---|
+| 1 | 150.0 | `NORMAL` | nothing near the machine |
+| 2 | 20.0 | `WARNING` | E1: reached warn 20 (≤ 20), same row |
+| 3 | 22.0 | `WARNING` | above 20 but inside the band (≤ 23): hold counter stays 0 |
+| 4–7 | 25.0 | `WARNING` | clear of 23: hold 1, 2, 3, 4 |
+| 8 | 25.0 | `NORMAL` | D2: clear for 5 consecutive rows |
+| 9 | 8.0 | `CRITICAL` | E2: straight from NORMAL to CRITICAL |
+| 10–14 | 14.0 | `CRITICAL` → `WARNING` at row 14 | D1: clear of 13 for 5 rows; one level only |
+| 15–19 | 400.0 | `WARNING` → `NORMAL` at row 19 | `400` = nothing in range, clear |
+| 20 | empty | `NORMAL` | optional sensor: an empty field does not raise the state (dashboard shows a fault) |
+
+Both tables are executable: `backend/tests/test_device_rules.py` runs them through
+`device_rules.py`, `backend/scripts/gen_firmware_config.py` compiles them into the firmware's
+parity test, and `backend/scripts/firmware_parity.py` checks that the Arduino gives the same
+state on every row.
+
 The backend runs the same state machine (`backend/app/device_rules.py`,
-`DeviceStateMachine`) for the simulator and as a mirror of the real device, and the
-firmware copies it in Phase 7. `GET /api/status` and every WebSocket row include its
+`DeviceStateMachine`) for the simulator and as a mirror of the real device. The firmware
+has a C++ port (`firmware/machine_monitor/state_machine.h`) that is checked row by row
+against it (parity test, see `firmware/README.md`). `GET /api/status` and every WebSocket row include its
 `state`, `reason`, `hold_remaining_s` and whether it `agrees` with the device's own
 `dev_state`.
 
@@ -165,18 +197,20 @@ firmware copies it in Phase 7. `GET /api/status` and every WebSocket row include
 | `humidity`   | ≥ 80 %RH  | ≥ 90 %RH    |
 | `sound_peak` | ≥ 40      | ≥ 120       |
 | `vib_count`  | ≥ 20 /s   | ≥ 60 /s     |
-| `leak_raw`   | TBD       | TBD         |
-| `distance_cm`| TBD       | TBD         |
+| `leak_raw`   | ≥ 50      | ≥ 200       |
+| `distance_cm`| **≤** 20 cm | **≤** 10 cm |
 | `current_ma` | TBD       | TBD         |
 | `bus_v`      | TBD       | TBD         |
 
-**The core-sensor limits are provisional demo limits** (each has a `limits_note` in the
-registry). They are low on purpose so a live bench demo can trigger them: a finger on the
+**All limits are provisional demo limits** (each has a `limits_note` in the registry). They are low on purpose so a live bench demo can trigger them: a finger on the
 DHT11 gives about 32–33 °C (WARNING), a few taps pass 20 vibration edges/s, and a clap
-passes a sound peak of 40. They will be retuned from real recordings in Phase 8. TBD
-limits will be set once the optional sensors are fitted. The same numbers live in
-`backend/config/sensors.json` (`warn` / `critical`) and must be kept in sync with the
-firmware by hand. See section 8 before using any of these limits on a real machine.
+passes a sound peak of 40, a wet finger on the leak sensor gives 240+, and a hand within
+10 cm of the ultrasonic sensor is CRITICAL. They will be retuned from real recordings in
+Phase 8. The numbers live only in `backend/config/sensors.json` (`warn` / `critical` /
+`hysteresis` / `direction`) and `settings.json` (`hold_seconds`); the firmware gets them from
+the generated `firmware/machine_monitor/config_generated.h` (run
+`backend/scripts/gen_firmware_config.py` after a change; a backend test fails while the
+header is out of date). See section 8 before using any of these limits on a real machine.
 
 ## 4. Example lines
 
@@ -265,12 +299,17 @@ Fields of each sensor entry:
 | `group`         | string, optional | Sensors that come from one physical module. All entries in a group must be enabled or disabled **together**. Currently only `ina219` (`current_ma` + `bus_v`). |
 | `hysteresis`    | number or null  | De-escalation margin `h` (section 3): to leave a level, the value must be clear of the limit by `h`, in the limit's direction. `null` = no margin. |
 | `limits_note`   | string, optional | Where the limits come from, e.g. "provisional demo limit - retune from real data in Phase 8". The dashboard can show it next to the limits. |
+| `out_of_range_value` | number, optional | A reading at or past this value means "nothing in range" (a real, clear reading). Only `distance_cm`: `400`. The dashboard shows it as "> 400 cm (clear)". |
+| `firmware_flag` | string          | Firmware only: the `USE_<SENSOR>` define generated for this sensor's module, e.g. `USE_HCSR04`. Sensors on one module share a flag (`USE_DHT11`, `USE_INA219`). |
+| `lcd_name`      | string (≤ 4)    | Firmware only: short name on the 16x2 LCD, e.g. `VIB` in `CRIT VIB 66>60`. |
 | `comment`       | string, optional | Free-text note for humans; ignored by the software. |
 
-Current state: the four core values are enabled; leak, ultrasonic and INA219 are
-`enabled: false`; `current_ma` and `bus_v` are `include_in_ml: false`. Every entry uses
-`direction: "above"`; for `distance_cm` the direction is still TBD (see its `comment`),
-because "object too close" would need `below`.
+Current state: the four core values, the water leak sensor and the ultrasonic safety zone
+are enabled; the INA219 (`current_ma`, `bus_v`) is `enabled: false` (not fitted). Only the
+four core values are ML features: leak and distance are `include_in_ml: false` because a
+leak or a person in the safety zone is a rule-based event (adding them would also need a
+retrain), and the INA219 is excluded (section 6). Every entry uses `direction: "above"`
+except `distance_cm` (`below`).
 
 **Groups:** enabling or disabling a group means toggling `enabled` on **every** entry with
 that `group` value. For the INA219 that's both `current_ma` and `bus_v`; the firmware
@@ -279,13 +318,14 @@ members disagree as a configuration error.
 
 ### How to add or remove an optional sensor (no code changes)
 
-1. **Firmware:** in `firmware/machine_monitor/machine_monitor.ino`, set the sensor's
-   `#define USE_<SENSOR>` flag to `1` (fitted) or `0` (removed), then compile and upload.
-   When it is `0` the firmware still prints the column, just empty.
-2. **Registry:** in `backend/config/sensors.json`, set `"enabled"` to `true` or `false`
+1. **Registry:** in `backend/config/sensors.json`, set `"enabled"` to `true` or `false`
    for that sensor's entry. If the entry has a `group` (e.g. `ina219`), change every
    entry in that group (`current_ma` **and** `bus_v`).
    Set `include_in_ml` if it should or shouldn't be an ML feature.
+2. **Firmware:** run `backend\venv\Scripts\python backend\scripts\gen_firmware_config.py`
+   (from the repo root). It rewrites `firmware/machine_monitor/config_generated.h`, which
+   sets the module's `USE_<SENSOR>` flag to `1` (fitted) or `0` (removed). Compile and
+   upload. When a flag is `0` the firmware still prints the column, just empty.
 3. **Restart and retrain:** restart the backend (`start.bat`) so it rereads the registry,
    and retrain the ML model if the set of ML features changed. The dashboard picks up
    the change on its own.
@@ -305,8 +345,8 @@ Deploying the monitor on an actual machine requires:
 
 1. **Recording that machine's own normal operation** (`mode=live`, `label=normal`) over
    enough time to cover its usual load, speed and temperature changes.
-2. **Re-deriving the limits** (`warn` / `critical` in `sensors.json` and the matching
-   firmware constants) from that recording.
+2. **Re-deriving the limits** (`warn` / `critical` in `sensors.json`, then regenerating
+   the firmware header and re-uploading) from that recording.
 3. **Retraining the ML model** on that machine's data.
 
 **The demo limits and the demo model must not be reused as-is on real equipment.**
@@ -403,6 +443,17 @@ and progress stay current. `GET /api/recordings` lists `file`, `folder` (`record
 `demo`), `rows`, `duration_s` (device clock, i.e. what a 1x replay takes), `size_bytes` and
 `modified` (ISO time); `data/demo/` holds the simulated demo recording of the portable build.
 `GET /api/status` also has `version`: `{app, name, version, git, build_date, frozen}`.
+
+**Link fields** in `GET /api/status`: `link` (`starting`, `ok`, `no_data`, `down`, `finished`),
+`silent_s` (seconds without a good row, counted from the source start if none came yet),
+`rejecting` (lines **are** arriving but every one is rejected, e.g. the wrong sketch or baud
+rate: lines rejected since the last good row, the newest within 15 s), `rejected_recent`
+(that count), and `last_reject_reason` / `last_rejected_line`. The dashboard uses them to
+say either "The data source is silent (no rows for 12 s). Check the USB cable and the
+Arduino." or "The Arduino is sending data, but not in the expected format (3 lines rejected).
+Is the correct sketch uploaded?". Opening the serial port resets the Uno: the backend flushes
+output buffered from before the reset 1 s after opening, and drops a row the reset cut off
+(text before a `#` on the same line) without counting it as rejected.
 
 **Warm start.** A recording's last W + 60 s can pre-fill the ML window and the forecast
 history, so a new source doesn't start with "warming up". For the first W live rows the

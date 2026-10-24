@@ -106,7 +106,7 @@ def test_no_model(reg):
 
 
 def test_needs_retrain_keeps_rules_working(make_registry, trained):
-    reg2 = make_registry(lambda d: next(s for s in d["sensors"] if s["key"] == "leak_raw").update(enabled=True))
+    reg2 = make_registry(lambda d: next(s for s in d["sensors"] if s["key"] == "leak_raw").update(include_in_ml=True))
     rig = Rig(reg2, Scorer(reg2, *trained))
     rows = sim_rows(reg2, "normal", 15, 2)
     rows[-1].values["temp_c"] = 36.0
@@ -150,8 +150,28 @@ def test_overall_never_critical_from_ml_in_any_scenario(reg, scorer):
             assert a["overall"] in (r.dev_state, "WARNING")
 
 
+def test_safety_zone_headline_says_below_and_mixed_says_past(reg, scorer):
+    rows = sim_rows(reg, "normal", 20, 4)
+    rows[-1].values.update(distance_cm=8.0)
+    rows[-1].dev_state = "CRITICAL"
+    a = Rig(reg, scorer).feed(rows)[-1]
+    assert a["device"]["state"] == "CRITICAL" and a["headline"] == "Safety zone below critical limit"
+    assert "Safety zone 8, crit limit 10" in a["headline_detail"]
+    rows[-1].values.update(vib_count=70.0)
+    a = Rig(reg, scorer).feed(rows)[-1]
+    assert a["headline"] == "Vibration and safety zone past critical limits"
+
+
+def test_safety_zone_clear_reading_is_normal(reg, scorer):
+    rows = sim_rows(reg, "normal", 20, 4)
+    for r in rows:
+        r.values["distance_cm"] = 400.0              # no echo = nothing in range
+    a = Rig(reg, scorer).feed(rows)[-1]
+    assert a["device"]["state"] == "NORMAL" and a["overall"] == "NORMAL"
+
+
 def test_forecast_headline(reg, scorer):
-    rows = sim_rows(reg, "normal", 90, 6)
+    rows = sim_rows(reg, "normal", 90, 9)                # a seed whose ML health stays above the clear level
     for i, r in enumerate(rows):
         r.values["temp_c"] = 29.0 + 0.02 * i                # steady climb, still below 32
     a = Rig(reg, scorer).feed(rows)[-1]
@@ -396,9 +416,9 @@ def test_api_train_job(api, tmp_path, reg):
 
 
 def test_api_needs_retrain_when_sensor_added(api):
-    def enable_leak(r):
+    def enable_leak(r):            # leak is enabled but not an ML feature; adding it to ML needs a retrain
         d = r.to_dict()
-        sensors = [{**s, "enabled": s["enabled_in_config"] or s["key"] == "leak_raw"} for s in d["sensors"]]
+        sensors = [{**s, "include_in_ml": s["include_in_ml"] or s["key"] == "leak_raw"} for s in d["sensors"]]
         return {"schema_version": 2, "csv_columns": d["csv_columns"], "sensors": sensors}
 
     with api(enable_leak) as client:

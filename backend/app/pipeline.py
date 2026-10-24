@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 SERIAL_CHECK_S = 5.0
 STATUS_TICK_S = 1.0     # status push interval while recording or replaying
+REJECT_RECENT_S = 15.0  # a rejected line this recent means "data is arriving, wrong format"
 
 
 class Pipeline:
@@ -43,6 +44,7 @@ class Pipeline:
         # or while rows keep arriving; only grace seconds without data mean "disconnected".
         self._started_at = time.monotonic()
         self._last_row_at: float | None = None
+        self._rejected_mark = state.parse_stats.rejected   # rejected count at the last good row
         self._reported_connected: bool | None = None
         self._watchdog: asyncio.Task[None] | None = None
         # ML + forecast. The model is loaded once; reload_model() swaps it at runtime.
@@ -92,6 +94,7 @@ class Pipeline:
             self.warm_start(warmstart_file)
         self._started_at = time.monotonic()
         self._last_row_at = None
+        self._rejected_mark = self.state.parse_stats.rejected
         self._task = asyncio.create_task(self._run(source), name=f"source-{source.kind}")
         if self._watchdog is None or self._watchdog.done():
             self._watchdog = asyncio.create_task(self._watch_link(), name="link-watchdog")
@@ -152,6 +155,7 @@ class Pipeline:
         st = self.state
         analysis = self.process(row)
         self._last_row_at = time.monotonic()
+        self._rejected_mark = st.parse_stats.rejected
         st.rows_received += 1
         st.history.append(row, analysis)
         st.recorder.write(row)            # raw contract row only: recordings stay clean training data
@@ -204,6 +208,11 @@ class Pipeline:
         link: "starting" (new source, within the grace period), "ok" (rows arriving),
         "no_data" (source open but silent for grace seconds), "down" (port/source error
         for grace seconds), "finished" (replay ended).
+
+        silent_s: seconds without a good row (since the source started if none came yet).
+        rejecting: lines ARE arriving but are all rejected (wrong sketch or baud rate):
+        lines were rejected since the last good row, the newest within REJECT_RECENT_S
+        (an I2C scanner sketch, for example, only prints every few seconds).
         """
         grace = self.state.settings.link_grace_s
         now = time.monotonic()
@@ -219,10 +228,17 @@ class Pipeline:
             state = "starting"
         else:
             state = "no_data" if src.connected else "down"
+        stats = self.state.parse_stats
+        rejected_recent = stats.rejected - self._rejected_mark
+        rejecting = (rejected_recent > 0 and stats.last_reject_at is not None
+                     and now - stats.last_reject_at < REJECT_RECENT_S)
         return {
             "connected": state in ("ok", "starting"),
             "link": state,
             "data_age_s": None if age is None else round(age, 1),
+            "silent_s": round(age if age is not None else now - self._started_at, 1),
+            "rejecting": rejecting,
+            "rejected_recent": rejected_recent,
         }
 
     def status(self) -> dict[str, Any]:
@@ -247,6 +263,8 @@ class Pipeline:
             "recording": st.recorder.status(),
             "rows_received": st.rows_received,
             "rows_rejected": st.parse_stats.rejected,
+            "last_reject_reason": st.parse_stats.last_reject_reason,
+            "last_rejected_line": st.parse_stats.last_rejected_line,
             "history_rows": len(st.history),
             "startup_reason": st.startup_reason,
             "registry_warnings": st.registry.warnings,

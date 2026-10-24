@@ -204,8 +204,9 @@ class Analyzer:
             over = [t for t in limits if not t["in_band"]] or limits
             names = [self._short(t["sensor"]) for t in over]
             names = [names[0]] + [n.lower() for n in names[1:]]
-            where = "near" if all(t["in_band"] for t in over) else (
-                "above" if over[0]["direction"] == "above" else "below")
+            directions = {t["direction"] for t in over}
+            where = ("near" if all(t["in_band"] for t in over)
+                     else "past" if len(directions) > 1 else directions.pop())   # "past": above + below mixed
             plural = "limits" if len(over) > 1 else "limit"
             parts.append(f"{join_names(names)} {where} {level} {plural}")
             for t in limits:

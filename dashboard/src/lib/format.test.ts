@@ -3,7 +3,8 @@ import type { AnalysisDevice, ForecastEntry, MlBlock } from "../types";
 import {
   alertSourceLabel, bannerText, causeText, causeTooltip, causeWords, confidence, forecastDetail, forecastText,
   forecastTone, formatValue, healthLabel, healthTone, shortName, versionText, visibleCauses, zBand,
-  isRecovering, limitsText, linkView, mlView, modeView, sensorLevel, stateView, stripRecovering,
+  isRecovering, limitsText, linkView, mlView, modeView, noDataNotice, sensorLevel, sensorValueText, stateView,
+  stripRecovering,
 } from "./format";
 
 const fc = (over: Partial<ForecastEntry>): ForecastEntry => ({
@@ -293,5 +294,26 @@ describe("versionText", () => {
     expect(versionText(v)).toBe("v0.6.0 · v0.6.0-0-gabc1234 · built 2026-10-24");
     expect(versionText({ ...v, git: "abc1234-dirty", build_date: null, frozen: false })).toBe("v0.6.0 · abc1234-dirty · dev");
     expect(versionText(undefined)).toBeNull();
+  });
+});
+
+describe("no-data notice", () => {
+  it("fills in the real number of seconds (never '?')", () => {
+    expect(noDataNotice({ silent_s: 7.4, rejecting: false, rejected_recent: 0 }))
+      .toBe("The data source is silent (no rows for 7 s). Check the USB cable and the Arduino.");
+  });
+
+  it("tells a wrong sketch / format apart from a silent port", () => {
+    expect(noDataNotice({ silent_s: 12, rejecting: true, rejected_recent: 3 })).toBe(
+      "The Arduino is sending data, but not in the expected format (3 lines rejected). Is the correct sketch uploaded?");
+    expect(noDataNotice({ silent_s: 12, rejecting: true, rejected_recent: 1 })).toContain("(1 line rejected)");
+  });
+});
+
+describe("sensorValueText", () => {
+  it("marks readings at the out-of-range value as clear", () => {
+    expect(sensorValueText({ out_of_range_value: 400 }, 400)).toEqual({ text: "> 400", clear: true });
+    expect(sensorValueText({ out_of_range_value: 400 }, 158.3)).toEqual({ text: "158.3", clear: false });
+    expect(sensorValueText({ out_of_range_value: null }, 400)).toEqual({ text: "400", clear: false });
   });
 });

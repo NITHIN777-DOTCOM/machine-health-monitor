@@ -21,14 +21,23 @@ def line(ms, temp=29.0, state="NORMAL"):
 
 
 class FakeSerial:
-    """Returns queued lines, then either raises (cable pulled) or idles like a 1 s timeout."""
+    """Returns queued lines, then either raises (cable pulled) or idles like a 1 s timeout.
+    `stale` lines are already buffered when the port opens (until reset_input_buffer)."""
 
-    def __init__(self, lines, then="idle"):
+    def __init__(self, lines, then="idle", stale=()):
         self.lines = list(lines)
+        self.stale = list(stale)
         self.then = then
         self.closed = False
+        self.flushed = False
+
+    def reset_input_buffer(self):
+        self.stale.clear()
+        self.flushed = True
 
     def readline(self):
+        if self.stale:
+            return self.stale.pop(0)
         if self.lines:
             return self.lines.pop(0)
         if self.then == "disconnect":
@@ -72,6 +81,28 @@ def test_partial_first_line_dropped_and_header_recognised(registry, caplog):
     assert "Device header matches the registry" in caplog.text
     assert all((r.mode, r.source, r.label) == ("live", "real", "unknown") for r in rows)
     assert fake.closed
+
+
+def test_output_from_before_the_reset_is_flushed(registry):
+    # Bench, Phase 7.1: the board ran with nobody reading; opening the port delivered an old
+    # header, 24 old rows and a row cut off by the reset ('25183,29# fw machine_monitor ...').
+    stale = [HEADER, line(24183), b"25183,29# fw machine_monitor v1.0.0\r\n"]
+    fake = FakeSerial([b"# fw machine_monitor v1.0.0\r\n", HEADER, line(1183), line(2183)], stale=stale)
+    src = make_source(registry, [fake])
+    rows = asyncio.run(collect(src, 2))
+    assert fake.flushed and [r.ms for r in rows] == [1183, 2183]
+    assert src.stats.rejected == 0
+
+
+def test_row_cut_off_by_a_reset_is_dropped_not_rejected(registry, caplog):
+    # Bench, Phase 7.1: the row being printed at the reset came out glued to the boot banner.
+    cut = b"160183,29.8,81.0,3,0,6,27.4,,,# fw machine_monitor v1.0.0\r\n"
+    src = make_source(registry, [FakeSerial([HEADER, line(1000), cut, HEADER, line(1183)])])
+    with caplog.at_level(logging.INFO):
+        rows = asyncio.run(collect(src, 2))
+    assert [r.ms for r in rows] == [1000, 1183]
+    assert src.stats.rejected == 0 and src.stats.comments == 3
+    assert "cut off by a board reset" in caplog.text
 
 
 def test_header_as_first_line_is_kept(registry):

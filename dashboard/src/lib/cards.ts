@@ -6,7 +6,7 @@
 //   enabled: true  + empty -> "No reading - sensor fault"
 
 import type { DevState, Registry, RowDict, Sensor } from "../types";
-import { formatValue, limitsText, sensorLevel } from "./format";
+import { limitsText, sensorLevel, sensorValueText } from "./format";
 
 export type CardStatus = "ok" | "fault" | "waiting";
 
@@ -46,12 +46,13 @@ export function buildSensorCards(registry: Registry | null | undefined, row: Row
       continue;
     }
     const value = sensorValue(row, s.key);
+    const shown = value == null ? null : sensorValueText(s, value);
     cards.push({
       key: s.key,
       name: s.display_name,
-      unit: s.unit,
+      unit: shown?.clear ? `${s.unit} (clear)`.trim() : s.unit,
       hardware: s.hardware,
-      value: value == null ? null : formatValue(value),
+      value: shown?.text ?? null,
       level: value == null ? null : sensorLevel(s, value),
       status: value != null ? "ok" : row ? "fault" : "waiting",
       limits: limitsText(s),

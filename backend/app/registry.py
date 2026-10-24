@@ -41,6 +41,8 @@ class Sensor:
     group: str | None = None
     comment: str | None = None
     limits_note: str | None = None
+    # A reading at or past this value means "nothing in range", not a fault (HC-SR04: no echo = 400).
+    out_of_range_value: float | None = None
     enabled_in_config: bool = True
 
     @property
@@ -71,6 +73,7 @@ class Sensor:
             "group": self.group,
             "comment": self.comment,
             "limits_note": self.limits_note,
+            "out_of_range_value": self.out_of_range_value,
         }
 
 
@@ -177,6 +180,7 @@ class Registry:
                 "group": raw.get("group") or None,
                 "comment": raw.get("comment") or None,
                 "limits_note": raw.get("limits_note") or None,
+                "out_of_range_value": _number_or_none(raw.get("out_of_range_value"), f"{key}.out_of_range_value", warn),
             })
 
         # Group rule: members must agree on 'enabled', otherwise the whole group is disabled.

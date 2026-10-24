@@ -42,6 +42,8 @@ export interface Sensor {
   group: string | null;
   comment: string | null;
   limits_note: string | null;
+  /** A reading at or past this value means "nothing in range" (HC-SR04: no echo = 400). */
+  out_of_range_value: number | null;
 }
 
 export interface Registry {
@@ -196,6 +198,12 @@ export interface Status {
   connected: boolean;
   link: Link;
   data_age_s: number | null;
+  /** Seconds without a good row (since the source started if none came yet). */
+  silent_s: number;
+  /** Lines ARE arriving but every one is rejected (wrong sketch or baud rate). */
+  rejecting: boolean;
+  /** Lines rejected since the last good row (or since the source started). */
+  rejected_recent: number;
   last_error: string | null;
   source_detail: Record<string, unknown>;
   device: DeviceStatus;
@@ -206,6 +214,8 @@ export interface Status {
   recording: RecordingStatus;
   rows_received: number;
   rows_rejected: number;
+  last_reject_reason: string | null;
+  last_rejected_line: string | null;
   history_rows: number;
   startup_reason: string;
   registry_warnings: string[];

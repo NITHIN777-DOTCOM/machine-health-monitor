@@ -165,7 +165,7 @@ def test_broken_model_file(reg, tmp_path):
 
 
 def test_sensor_mismatch_needs_retrain_and_does_not_crash(make_registry, trained):
-    reg2 = make_registry(lambda d: next(s for s in d["sensors"] if s["key"] == "leak_raw").update(enabled=True))
+    reg2 = make_registry(lambda d: next(s for s in d["sensors"] if s["key"] == "leak_raw").update(include_in_ml=True))
     s = Scorer(reg2, *trained)
     assert s.status == NEEDS_RETRAIN and "sensors changed" in s.message
     assert s.make_window() is None

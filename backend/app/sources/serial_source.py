@@ -22,6 +22,10 @@ from .base import Source
 log = logging.getLogger(__name__)
 
 ARDUINO_VIDS = {0x2341}  # Arduino LLC (genuine Uno with ATmega16U2)
+# After opening the port (which resets the Uno), drop whatever is already buffered: output
+# from before the reset, when nobody was reading. The new boot prints its first line ~1.5 s
+# after the reset, so flushing at 1 s loses nothing.
+STALE_FLUSH_S = 1.0
 NAME_HINTS = ("arduino", "ch340", "usb-serial")
 
 
@@ -100,8 +104,13 @@ class SerialSource(Source):
 
             log.info("Opened %s (%s) at %d baud", port, how, self.settings.baud)
             try:
-                # Opening the port resets the Uno; give it time to boot.
-                await asyncio.sleep(self.settings.serial_boot_wait_s)
+                # Opening the port resets the Uno; give it time to boot. Old output (the board
+                # may have been running with nobody reading) can still sit in the USB-serial
+                # buffers and would arrive as a burst of stale rows plus a cut-off line.
+                wait = self.settings.serial_boot_wait_s
+                await asyncio.sleep(min(STALE_FLUSH_S, wait))
+                await asyncio.to_thread(self._ser.reset_input_buffer)
+                await asyncio.sleep(max(0.0, wait - STALE_FLUSH_S))
                 await self._set_status(connected=True, error=None)
                 first = True
                 while True:
@@ -109,6 +118,13 @@ class SerialSource(Source):
                     if not raw:
                         continue  # 1 s timeout with no data; keep waiting
                     line = raw.decode("ascii", errors="replace")
+                    cut = line.find("#")
+                    if cut > 0 and line[:cut].strip():
+                        # Data lines never contain '#': the board reset while printing a row
+                        # (opening the port resets it) and the boot banner followed the
+                        # fragment on the same line. Drop the fragment, keep the comment.
+                        log.info("Dropped a line cut off by a board reset: %r", line[:cut][:80])
+                        line = line[cut:]
                     if first and not line.lstrip().startswith("#"):
                         first = False  # may be a partial line from before we started reading
                         continue

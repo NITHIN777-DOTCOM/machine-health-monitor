@@ -14,7 +14,7 @@ function loadRegistry(): Registry {
     csv_columns: raw.csv_columns,
     warnings: [],
     sensors: raw.sensors.map((s) => ({
-      group: null, comment: null, limits_note: null, ...s,
+      group: null, comment: null, limits_note: null, out_of_range_value: null, ...s,
       enabled_in_config: s.enabled!, in_ml: !!(s.enabled && s.include_in_ml),
     }) as Sensor),
   };
@@ -28,7 +28,7 @@ describe("buildSensorCards", () => {
   const registry = loadRegistry();
 
   it("makes one card per enabled sensor and lists the disabled ones as not connected", () => {
-    const { cards, notConnected } = buildSensorCards(registry, row({ temp_c: 29.5, humidity: 60, sound_peak: 4, vib_count: 0 }));
+    const { cards, notConnected } = buildSensorCards(registry, row({ temp_c: 29.5, humidity: 60, sound_peak: 4, vib_count: 0, leak_raw: 6, distance_cm: 158 }));
     expect(cards.map((c) => c.key)).toEqual(enabledSensors(registry).map((s) => s.key));
     expect(notConnected.map((s) => s.key)).toEqual(registry.sensors.filter((s) => !s.enabled).map((s) => s.key));
     expect(cards.every((c) => c.status === "ok")).toBe(true);
@@ -54,6 +54,17 @@ describe("buildSensorCards", () => {
     expect(by.humidity!.level).toBe("CRITICAL");
     expect(by.vib_count!.level).toBe("CRITICAL");
     expect(by.temp_c!.limits).toBe("warn ≥ 32 · crit ≥ 35 °C");
+  });
+
+  it("shows the safety zone's no-echo reading as '> 400 cm (clear)', a level as below", () => {
+    const base = { temp_c: 29.5, humidity: 60, sound_peak: 4, vib_count: 0, leak_raw: 6 };
+    const clear = buildSensorCards(registry, row({ ...base, distance_cm: 400 })).cards.find((c) => c.key === "distance_cm")!;
+    expect(clear).toMatchObject({ value: "> 400", unit: "cm (clear)", level: "NORMAL", status: "ok" });
+    expect(clear.name).toBe("Safety zone (distance)");
+    const near = buildSensorCards(registry, row({ ...base, distance_cm: 8.5 })).cards.find((c) => c.key === "distance_cm")!;
+    expect(near).toMatchObject({ value: "8.5", unit: "cm", level: "CRITICAL", limits: "warn ≤ 20 · crit ≤ 10 cm" });
+    const gone = buildSensorCards(registry, row({ ...base, distance_cm: null })).cards.find((c) => c.key === "distance_cm")!;
+    expect(gone.status).toBe("fault");                 // empty = a genuine sensor fault
   });
 
   it("shows 'waiting' before the first row", () => {

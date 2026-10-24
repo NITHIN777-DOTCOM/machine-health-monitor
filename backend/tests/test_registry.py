@@ -13,9 +13,29 @@ def _set(data, key, **fields):
 
 
 def test_current_config_lists(registry):
-    assert [s.key for s in registry.enabled] == ["temp_c", "humidity", "sound_peak", "vib_count"]
+    # Phase 7.1: leak and the HC-SR04 are fitted; they are rule-only (not ML features).
+    assert [s.key for s in registry.enabled] == ["temp_c", "humidity", "sound_peak", "vib_count", "leak_raw", "distance_cm"]
     assert [s.key for s in registry.ml] == ["temp_c", "humidity", "sound_peak", "vib_count"]
     assert registry.warnings == []
+
+
+def test_safety_zone_and_leak_limits(registry):
+    d = registry.get("distance_cm")
+    assert (d.warn, d.critical, d.direction, d.hysteresis) == (20, 10, "below", 3)
+    assert d.out_of_range_value == 400 and d.display_name == "Safety zone (distance)"
+    leak = registry.get("leak_raw")
+    assert (leak.warn, leak.critical, leak.direction, leak.hysteresis) == (50, 200, "above", 20)
+    assert not leak.forecast and not d.forecast and d.limits_note and leak.limits_note
+    assert all(s.out_of_range_value is None for s in registry.sensors if s.key != "distance_cm")
+
+
+def test_shipped_model_matches_the_registry(registry):
+    """Enabling rule-only sensors must not force a retrain (no NEEDS_RETRAIN)."""
+    from app.config import MODELS_DIR
+    from app.ml.scorer import Scorer
+    scorer = Scorer.load(registry, MODELS_DIR)
+    assert scorer.meta["sensors"] == [s.key for s in registry.ml]
+    assert scorer.status == "READY", scorer.message
 
 
 def test_ml_requires_enabled_and_include_in_ml(make_registry):

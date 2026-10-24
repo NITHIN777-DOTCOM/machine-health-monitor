@@ -1,4 +1,5 @@
 """REST + WebSocket API with FastAPI's TestClient. The serial port is never touched."""
+import asyncio
 import shutil
 import time
 
@@ -7,7 +8,8 @@ from fastapi.testclient import TestClient
 
 import app.main as main
 from app.config import MODELS_DIR, Settings
-from app.models import stored_columns
+from app.models import parse_line, stored_columns
+from app.sources.base import Source
 from app.sources import serial_source
 
 
@@ -221,3 +223,49 @@ def test_serial_unavailable_when_forced_to_simulator(client):
     assert serial == {"available": False, "port": None,
                       "note": ("Serial disabled: simulator-only mode (MHM_SOURCE=simulator, "
                                "--simulator or 'Start (simulator only).bat'). Restart with Start.bat to use the Arduino.")}
+
+
+class LinesSource(Source):
+    """Feeds raw serial lines through the real parser, then goes quiet (like a wrong sketch)."""
+    kind = "serial"
+
+    def __init__(self, *args, lines, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lines = lines
+
+    async def rows(self):
+        await self._set_status(connected=True, error=None)
+        for text in self.lines:
+            row = parse_line(text, self.registry, self.stats)
+            if row is not None:
+                yield row
+            await asyncio.sleep(0.01)
+        while True:
+            await asyncio.sleep(1)
+
+
+def switch_to_lines(client, lines):
+    st, pipeline = main.app.state.mhm, main.app.state.pipeline
+    src = LinesSource(registry=st.registry, stats=st.parse_stats, lines=lines)
+    client.portal.call(pipeline.switch, src)
+
+
+def test_silent_source_reports_seconds_since_start(client):
+    switch_to_lines(client, [])
+    s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "no_data" and s)
+    assert s["data_age_s"] is None                 # no row ever: the old banner showed "?"
+    assert s["silent_s"] >= 0.3 and s["rejecting"] is False and s["rejected_recent"] == 0
+
+
+def test_rejected_lines_are_told_apart_from_silence(client):
+    switch_to_lines(client, ["Scanning...", "I2C device found at address 0x27 !", "done"])
+    s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "no_data" and s)
+    assert s["rejecting"] is True and s["rejected_recent"] == 3
+    assert s["last_rejected_line"] == "done" and "fields" in s["last_reject_reason"]
+
+
+def test_a_good_row_resets_the_rejected_count(client, registry):
+    good = "1000," + ",".join("" for _ in registry.csv_columns[1:-1]) + ",NORMAL"
+    switch_to_lines(client, ["garbage", good])
+    s = wait_for(lambda: (s := client.get("/api/status").json())["link"] == "no_data" and s)
+    assert s["rejected_recent"] == 0 and s["rejecting"] is False

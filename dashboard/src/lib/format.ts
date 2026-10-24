@@ -4,7 +4,7 @@
 
 import type {
   AlertSource, AnalysisDevice, DevState, Direction, ForecastEntry, Link, MlBlock, MlCause, Mode,
-  Sensor, SourceType, VersionInfo,
+  Sensor, SourceType, Status, VersionInfo,
 } from "../types";
 
 /** Icon names drawn by components/Icon.tsx. */
@@ -367,6 +367,25 @@ export function linkView(ws: "connecting" | "open" | "closed", link: Link | null
     case "finished": return { label: "Replay finished", icon: "info", tone: "neutral", stale: true };
     default: return { label: "Waiting", icon: "clock", tone: "neutral", stale: true };
   }
+}
+
+/** Notice for link "no_data". Lines arriving but rejected (wrong sketch or baud rate) is a
+ *  different problem from a silent port (cable, board), so it gets a different hint. */
+export function noDataNotice(s: Pick<Status, "silent_s" | "rejecting" | "rejected_recent">): string {
+  if (s.rejecting) {
+    const n = s.rejected_recent;
+    return `The Arduino is sending data, but not in the expected format (${n} line${n === 1 ? "" : "s"} rejected). ` +
+      "Is the correct sketch uploaded?";
+  }
+  return `The data source is silent (no rows for ${Math.round(s.silent_s)} s). Check the USB cable and the Arduino.`;
+}
+
+/** Card value for a sensor reading: "> 400" when it is at the sensor's out-of-range value
+ *  (nothing in range), else formatValue(). */
+export function sensorValueText(sensor: Pick<Sensor, "out_of_range_value">, value: number): { text: string; clear: boolean } {
+  const oor = sensor.out_of_range_value;
+  if (oor != null && value >= oor) return { text: `> ${formatValue(oor)}`, clear: true };
+  return { text: formatValue(value), clear: false };
 }
 
 /** "23 Oct 2026, 20:16" from an ISO timestamp; the input if it can't be parsed. */

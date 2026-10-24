@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "description": "Sensor registry. The backend, ML pipeline and dashboard read the sensor list from this file. See docs/DATA_CONTRACT.md.",
+  "description": "Sensor registry. The backend, ML pipeline and dashboard read the sensor list from this file; the firmware limits are generated from it (backend/scripts/gen_firmware_config.py). See docs/DATA_CONTRACT.md.",
   "csv_columns": [
     "ms",
     "temp_c",
@@ -28,7 +28,9 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
-      "forecast": true
+      "forecast": true,
+      "firmware_flag": "USE_DHT11",
+      "lcd_name": "TMP"
     },
     {
       "key": "humidity",
@@ -44,7 +46,9 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
-      "forecast": true
+      "forecast": true,
+      "firmware_flag": "USE_DHT11",
+      "lcd_name": "HUM"
     },
     {
       "key": "sound_peak",
@@ -60,7 +64,9 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
-      "forecast": false
+      "forecast": false,
+      "firmware_flag": "USE_SOUND",
+      "lcd_name": "SND"
     },
     {
       "key": "vib_count",
@@ -76,7 +82,9 @@
       "tier": "core",
       "enabled": true,
       "include_in_ml": true,
-      "forecast": false
+      "forecast": false,
+      "firmware_flag": "USE_VIBRATION",
+      "lcd_name": "VIB"
     },
     {
       "key": "leak_raw",
@@ -84,30 +92,38 @@
       "unit": "counts",
       "hardware": "Water leak sensor (analog)",
       "pin": "A1",
-      "warn": null,
-      "critical": null,
+      "warn": 50,
+      "critical": 200,
       "direction": "above",
-      "hysteresis": null,
+      "hysteresis": 20,
+      "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "optional",
-      "enabled": false,
-      "include_in_ml": true,
-      "forecast": false
+      "enabled": true,
+      "include_in_ml": false,
+      "forecast": false,
+      "firmware_flag": "USE_LEAK",
+      "lcd_name": "LEAK",
+      "comment": "Rule-based event, not an ML feature (adding it would also need a retrain). Dry 4-9, wet 240-576 (bench test 2026-10-23)."
     },
     {
       "key": "distance_cm",
-      "display_name": "Distance",
+      "display_name": "Safety zone (distance)",
       "unit": "cm",
       "hardware": "HC-SR04",
       "pin": "D9 (Trig) / D10 (Echo)",
-      "warn": null,
-      "critical": null,
-      "direction": "above",
-      "hysteresis": null,
+      "warn": 20,
+      "critical": 10,
+      "direction": "below",
+      "hysteresis": 3,
+      "limits_note": "provisional demo limit - retune from real data in Phase 8",
       "tier": "optional",
-      "enabled": false,
-      "include_in_ml": true,
+      "enabled": true,
+      "include_in_ml": false,
       "forecast": false,
-      "comment": "direction TBD: may need to be \"below\" (object too close) once limits are chosen"
+      "out_of_range_value": 400,
+      "firmware_flag": "USE_HCSR04",
+      "lcd_name": "DIST",
+      "comment": "Safety zone: a person or object too close to the running machine. 400 = no echo, nothing in range (clear); an empty field is a sensor fault."
     },
     {
       "key": "current_ma",
@@ -123,6 +139,8 @@
       "enabled": false,
       "include_in_ml": false,
       "forecast": false,
+      "firmware_flag": "USE_INA219",
+      "lcd_name": "CUR",
       "group": "ina219"
     },
     {
@@ -139,6 +157,8 @@
       "enabled": false,
       "include_in_ml": false,
       "forecast": false,
+      "firmware_flag": "USE_INA219",
+      "lcd_name": "VBUS",
       "group": "ina219"
     }
   ]

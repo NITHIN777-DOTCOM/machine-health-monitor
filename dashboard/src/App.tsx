@@ -13,7 +13,7 @@ import { TrendCharts } from "./components/TrendCharts";
 import { useDashboard, type DashboardData } from "./hooks/useDashboard";
 import { useTheme } from "./hooks/useTheme";
 import { enabledSensors } from "./lib/cards";
-import { DEFAULT_HEALTH_LEVELS, linkView, modeView } from "./lib/format";
+import { DEFAULT_HEALTH_LEVELS, linkView, modeView, noDataNotice } from "./lib/format";
 
 const DEFAULT_HOLD_S = 5;
 
@@ -26,7 +26,7 @@ function connectionNotice(d: DashboardData): string | null {
   if (d.ws === "connecting") return d.loaded ? "Reconnecting to the backend..." : "Connecting to the backend...";
   switch (d.status?.link) {
     case "no_data":
-      return `The data source is silent (no rows for ${d.status.data_age_s ?? "?"} s). Check the USB cable and the Arduino.`;
+      return noDataNotice(d.status);
     case "down":
       return `Data source error: ${d.status.last_error ?? "source is down"}. Showing the last data received.`;
     case "finished":

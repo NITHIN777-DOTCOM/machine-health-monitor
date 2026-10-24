@@ -20,14 +20,14 @@ so docs and UI text must be clear to a newcomer.
 | `backend/config/settings.json` | Runtime settings (hold_seconds, ML window, forecast, smoothing, warmstart_file) |
 | `backend/config/sim_profile.json` | Simulator baselines + scenarios |
 | `backend/app/` | `main.py` (API + dashboard at `/`), `launcher.py` (exe entry), `paths.py` (frozen vs repo paths), `version.py`, `pipeline.py`, `analysis.py` (live ML/overall/headline), `device_rules.py`, `registry.py`, `models.py`, `recorder.py`, `state.py`, `sources/` (simulator, serial_source, replay), `ml/` (features, training, scorer, forecast, evaluation, dataset, jobs) |
-| `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `make_demo_recording.py`, `train.py`, `evaluate.py`, `run_tests.bat` |
-| `backend/tests/` | pytest suite (314 tests), `helpers.py`, `conftest.py` |
+| `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `make_demo_recording.py`, `train.py`, `evaluate.py`, `gen_firmware_config.py` (sensors.json + settings.json → `config_generated.h`), `firmware_parity.py` (board vs device_rules.py), `run_tests.bat` |
+| `backend/tests/` | pytest suite (329 tests), `helpers.py`, `conftest.py` |
 | `build.bat`, `packaging/` | Portable build: `MachineHealthMonitor.spec` (onedir), `build_release.py` (version.json, assemble + zip), `Start.bat`, `Start (simulator only).bat`, `QUICK_START.txt`. `backend/mhm_entry.py` = PyInstaller stub, `backend/requirements-build.txt` pins PyInstaller |
 | `release/`, `build_test/`, `logs/`, `data/demo/` | Build output, portability-test copies, runtime logs, generated demo recording (all gitignored) |
 | `dashboard/` | Vite + React 19 + TS (strict) + Recharts. `src/types.ts` mirrors the backend JSON; `src/lib/` pure helpers (Vitest); `scripts/screenshots.mjs` (Playwright, project-local Chromium). See `dashboard/README.md` |
 | `docs/screenshots/phase5/` | Review screenshots (committed; `npm run screenshots`) |
 | `docs/phase5_report.md` | Phase 5 report (redesign, health curve, controls, decisions) |
-| `firmware/` | `README.md` (pin map, libraries, upload), `machine_monitor/` (sketch not written yet) |
+| `firmware/` | `README.md` (pins, defines, LCD/buzzer, watchdog, parity, memory, libraries), `machine_monitor/` (v1.0.0: `.ino`, `config_generated.h` GENERATED, `state_machine.h`, `display.h`, `buzzer.h`), `tests/` (single-sensor sketches + `RESULTS.md`), `build/` (gitignored) |
 | `data/recordings/` | Real recordings (committed). `data/synthetic/` is gitignored, regenerate it |
 | `models/` | `model.joblib` + `model_meta.json` (committed, PROVISIONAL) |
 | `docs/eval/` | Eval reports; `*_SIMULATED.md` are gitignored |
@@ -80,16 +80,22 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
 ## Key rules and decisions
 - **sensors.json is the only sensor list.** Nothing may hard-code sensors. Adding/removing an
   optional sensor = firmware `USE_<SENSOR>` flag + registry `enabled`, no code change.
-- Core sensors: DHT11 (temp_c, humidity on A0), sound (A2), SW-420 vibration (D2). Optional, currently
-  `enabled: false`: leak (A1), HC-SR04 (D9/D10), INA219 (`group: ina219` → current_ma + bus_v toggle together;
-  a mismatched group is disabled with a warning).
-- ML sensors = `enabled AND include_in_ml`; current_ma/bus_v are excluded. `forecast: true` only for
-  temp_c and humidity (sound/vibration are spiky).
+- Core sensors: DHT11 (temp_c, humidity on A0), sound (A2), SW-420 vibration (D2). Optional: leak (A1) and
+  HC-SR04 (D9/D10) **enabled** (Phase 7.1); INA219 `enabled: false` (not fitted; `group: ina219` → current_ma +
+  bus_v toggle together; a mismatched group is disabled with a warning).
+- ML sensors = `enabled AND include_in_ml` = the 4 core values only (leak/distance are rule-only events,
+  current_ma/bus_v excluded), so the shipped model still matches (test). `forecast: true` only for temp_c, humidity.
 - **Demo limits are provisional** (`limits_note`, retune in Phase 8): temp 32/35, humidity 80/90,
-  sound 40/120, vibration 20/60, all direction "above". Optional sensors TBD.
+  sound 40/120, vibration 20/60, leak 50/200 (h 20), all "above"; **distance_cm = safety zone, "below"
+  20/10 (h 3)**. HC-SR04 no echo = **400** (nothing in range, clear; `out_of_range_value`, dashboard
+  "> 400 cm (clear)"); empty distance = sensor fault.
+- **Limits are single-source:** sensors.json/settings.json → `scripts/gen_firmware_config.py` →
+  `firmware/machine_monitor/config_generated.h` (also `USE_<SENSOR>` from `firmware_flag`, LCD names from
+  `lcd_name`). Re-run it after any limit/enabled change; `test_firmware_config.py` fails while it's stale.
 - dev_state: escalation immediate; de-escalation needs value clear by `hysteresis`
-  (temp 0.5, hum 3, sound 10, vib 5) for **hold_seconds = 5** consecutive rows, one level at a time.
-  An enabled core sensor empty → at least WARNING. A test parses the worked example in DATA_CONTRACT.md.
+  (temp 0.5, hum 3, sound 10, vib 5, leak 20, dist 3) for **hold_seconds = 5** consecutive rows, one level at a
+  time. An enabled core sensor empty → at least WARNING. Tests parse both worked examples in DATA_CONTRACT.md
+  (temp above, distance below); `firmware_parity.py` checks the board against them (71/71 on 2026-10-24).
 - **ML is advisory:** an ANOMALY can raise overall to WARNING, **never CRITICAL**; only rules make CRITICAL.
   ML smoothing: ANOMALY after health < 50 for 3 rows, clears after > 60 for 5 rows.
   Statuses: OK, ANOMALY, WARMING_UP, ML_UNAVAILABLE, NO_MODEL, NEEDS_RETRAIN (sensor list changed; rules keep working).
@@ -123,17 +129,21 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   `MHM_SOURCE`) → 5 (ISA-101 redesign, gradual health curve, plain-language text, Controls drawer:
   source/scenario/speed, Record/Stop + label, Replay with progress, warm start) → 6 (portable onedir exe,
   launcher, FastAPI serves the dashboard, paths.py, build.bat, demo recording, GitHub release v0.6.0).
-- Next: 7 firmware, 8 real data + retrain + retune limits, 9 release + docs.
+  → 7.1 (final firmware v1.0.0, generated config, parity test, leak + safety zone enabled, dashboard
+  silent vs wrong-format notice).
+- Next: 7.2 (then rebuild the release), 8 real data + retrain + retune limits, 9 release + docs.
 
 ## Known open items
 - Dashboard "recovering" rule (done in Phase 4, `dashboard/src/lib/format.ts`): the banner says "Recovering"
   only when `hold_remaining_s <= hold_seconds - 2` (and says "rules clear ...; ML anomaly still active" if ML
   still flags it); otherwise it strips the backend's "recovering, was:" prefix. The device card shows the hold countdown quietly.
-- Phase 7 firmware must copy `backend/app/device_rules.py` exactly (hysteresis, 5 s hold, one level at a time,
-  core-sensor fault → WARNING, LCD reason text), print the contract header, and use `USE_<SENSOR>` flags.
-  Until then the backend mirror may disagree with the device (`analysis.device.agrees`).
-- The sketch currently on the Uno is an I2C scanner at 9600 baud (no contract data yet).
-- The portable build ships `firmware/machine_monitor/` as-is; it is empty until Phase 7 (rebuild the release then).
+- `machine_monitor` v1.0.0 is on the Uno. Live run 2026-10-24: rows_rejected 0, `agrees` true on every row.
+  The room's humidity (80–84 %) is at/over the provisional 80 % warn limit, so the bench sits in WARNING.
+- **Buzzer polarity unconfirmed:** D8 LOW draws current (and shifted all analog readings ~20 counts, so silent =
+  high impedance now); no tone detected by the mic in any state. Run `firmware/tests/test_buzzer` by ear; set
+  `BUZZER_ACTIVE_LOW 1` if it sounds on LOW.
+- Live ML shows ANOMALY on real bench data (model is synthetic-only, provisional): expected until Phase 8.
+- The portable release still has the empty firmware folder: rebuild after Phase 7.2.
 - The exe is unsigned: SmartScreen "More info → Run anyway" on first start (documented in QUICK_START.txt).
 - Portability test not yet done with the Arduino plugged in (exe auto-detection of the Uno unverified).
-- Optional sensors (leak, HC-SR04, INA219) are untested; their limits are TBD.
+- INA219 untested (not fitted; the `USE_INA219 1` build compiles). `LEAK_POWER_PIN` option untested.

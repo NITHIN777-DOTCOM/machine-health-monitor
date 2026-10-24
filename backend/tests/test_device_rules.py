@@ -1,10 +1,9 @@
 """DeviceStateMachine: escalation, hysteresis, hold time (DATA_CONTRACT.md section 3)."""
-import re
-
 import pytest
 
 from app.config import ROOT_DIR
 from app.device_rules import DeviceStateMachine, evaluate, triggers
+import gen_firmware_config as gen
 from helpers import make_reg, sensor
 
 
@@ -158,34 +157,43 @@ def test_stateless_evaluate_matches_triggers(registry):
     assert {t.sensor for t in triggers(values, registry)} == {"temp_c", "sound_peak"}
 
 
-# ---- the worked example in DATA_CONTRACT.md -------------------------------------------
+# ---- the worked examples in DATA_CONTRACT.md ------------------------------------------
+# Parsed by the same code that writes the firmware parity vectors (gen_firmware_config.py).
 
-def _worked_example():
-    """Parse the 'Worked example' table from DATA_CONTRACT.md into (params, [(value, state)])."""
-    doc = (ROOT_DIR / "docs" / "DATA_CONTRACT.md").read_text(encoding="utf-8")
-    section = doc.split("#### Worked example", 1)[1]
-    heading = section.splitlines()[0]
-    params = {k: float(v) for k, v in re.findall(r"(warn|critical|h|hold) ([\d.]+)", heading)}
-    table = [l for l in section.split("\n\n", 2)[1].splitlines() if l.startswith("|")][2:]
-    steps = []
-    for line in table:
-        rows_cell, value_cell, state_cell = [c.strip() for c in line.strip("|").split("|")][:3]
-        lo, _, hi = rows_cell.replace("–", "-").partition("-")
-        lo, hi = int(lo), int(hi or lo)
-        value = None if value_cell == "empty" else float(value_cell)
-        states = re.findall(r"`(NORMAL|WARNING|CRITICAL)`", state_cell)
-        at = re.search(r"at row (\d+)", state_cell)
-        for row in range(lo, hi + 1):
-            expected = states[1] if at and row >= int(at.group(1)) else states[0]
-            steps.append((row, value, expected))
-    return params, steps
+def _examples():
+    return gen.parse_examples((ROOT_DIR / "docs" / "DATA_CONTRACT.md").read_text(encoding="utf-8"))
 
 
 def test_data_contract_worked_example():
-    params, steps = _worked_example()
-    assert params == {"warn": 32, "critical": 35, "h": 0.5, "hold": 5}
-    assert [s[0] for s in steps] == list(range(1, 20)), "worked example must have rows 1..19"
-    reg = make_reg(sensor("temp_c", params["warn"], params["critical"], hysteresis=params["h"]))
-    sm = DeviceStateMachine(reg, int(params["hold"]))
-    for row, value, expected in steps:
+    ex = _examples()[0]
+    assert (ex.key, ex.direction, ex.warn, ex.critical, ex.h, ex.hold) == ("temp_c", "above", 32, 35, 0.5, 5)
+    assert [s[0] for s in ex.steps] == list(range(1, 20)), "worked example must have rows 1..19"
+    reg = make_reg(sensor("temp_c", ex.warn, ex.critical, hysteresis=ex.h))
+    sm = DeviceStateMachine(reg, ex.hold)
+    for row, value, expected in ex.steps:
         assert sm.update({"temp_c": value}) == expected, f"worked example row {row}"
+
+
+def test_data_contract_worked_example_2_safety_zone_below(sensors_data):
+    ex = _examples()[1]
+    assert (ex.key, ex.direction, ex.warn, ex.critical, ex.h, ex.hold) == ("distance_cm", "below", 20, 10, 3, 5)
+    assert [s[0] for s in ex.steps] == list(range(1, 21))
+    reg = gen.example_registry(ex, sensors_data)
+    assert reg.get("distance_cm").tier == "optional"
+    sm = DeviceStateMachine(reg, ex.hold)
+    for row, value, expected in ex.steps:
+        assert sm.update({"distance_cm": value}) == expected, f"worked example 2 row {row}"
+
+
+def test_real_registry_safety_zone(registry):
+    """distance_cm in the real registry: below 20 warn / 10 crit, 400 (no echo) is clear."""
+    sm = DeviceStateMachine(registry, 5)
+    base = {"temp_c": 29.0, "humidity": 60.0, "sound_peak": 5.0, "vib_count": 0.0, "leak_raw": 6.0}
+    assert sm.update({**base, "distance_cm": 400.0}) == "NORMAL"
+    assert sm.update({**base, "distance_cm": 20.0}) == "WARNING"
+    assert sm.snapshot()["reason"] == "Safety zone (distance) 20 <= warn 20"
+    assert sm.update({**base, "distance_cm": 9.9}) == "CRITICAL"
+    assert [sm.update({**base, "distance_cm": 12.9}) for _ in range(6)] == ["CRITICAL"] * 6   # inside 10..13
+    assert [sm.update({**base, "distance_cm": 400.0}) for _ in range(5)][-1] == "WARNING"
+    assert sm.update({**base, "distance_cm": None}) == "WARNING"     # optional: empty does not raise
+    assert [sm.update({**base, "distance_cm": 150.0}) for _ in range(5)][-1] == "NORMAL"
