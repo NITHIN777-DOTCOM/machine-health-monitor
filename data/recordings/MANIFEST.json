@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "rules": [
+    "role 'train': may be used for training and threshold tuning",
+    "role 'test': held out; evaluation only, never for training, tuning limits or choosing thresholds",
+    "every real recording in this folder must be listed here",
+    "duration_s = wall-clock span first to last row; recorded_s = device-clock time actually recorded"
+  ],
+  "sessions": [
+    {
+      "file": "real_session_01_20261024.csv",
+      "role": "train",
+      "date": "2026-10-24",
+      "start": "2026-10-24T10:52:15.546+05:30",
+      "end": "2026-10-24T12:23:05.304+05:30",
+      "rows": 3408,
+      "duration_s": 5450,
+      "recorded_s": 3399,
+      "labels": {
+        "normal": 868,
+        "fault": 686,
+        "unknown": 1854
+      },
+      "phase": "7.2",
+      "notes": "HIL test session; firmware v1.0.0 -> v1.0.2 during the session; see firmware/tests/HIL_RESULTS.md"
+    },
+    {
+      "file": "real_session_02_test_20261024.csv",
+      "role": "test",
+      "date": "2026-10-24",
+      "start": "2026-10-24T15:36:33.395+05:30",
+      "end": "2026-10-24T16:09:52.238+05:30",
+      "rows": 1993,
+      "duration_s": 1999,
+      "recorded_s": 1992,
+      "labels": {
+        "normal": 921,
+        "fault": 246,
+        "unknown": 826
+      },
+      "phase": "8.1",
+      "notes": "Held-out test session (firmware v1.0.2), never used for training or tuning; includes subtle below-limit vibration and sound faults; see data/recordings/README.md"
+    }
+  ]
+}
