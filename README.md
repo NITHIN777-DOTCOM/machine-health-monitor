@@ -14,7 +14,7 @@ Embedded Systems course project (BCSE305L).
 
 For presenting on any Windows 10/11 laptop. **No Python, no Node, no internet needed.**
 
-1. Get `MachineHealthMonitor-v0.6.0-win64.zip` from the
+1. Get `MachineHealthMonitor-v0.8.0-win64.zip` from the
    [GitHub releases page](https://github.com/NITHIN777-DOTCOM/machine-health-monitor/releases)
    (or the `release\MachineHealthMonitor\` folder from someone who built it).
    Right-click the zip -> Properties -> tick **Unblock** -> OK, then extract it anywhere
@@ -35,7 +35,35 @@ For presenting on any Windows 10/11 laptop. **No Python, no Node, no internet ne
   detected, Serial Monitor holding the port, logs.
 - Recordings go to `data
 ecordings\` **inside that folder**; `config\*.json` there can be edited
-  (restart after). The ML model is **provisional** (trained on simulated data).
+  (restart after). The ML model is **bench-trained** on real recordings of the demo bench;
+  the dashboard's **Model** button shows how it did on a held-out test session.
+
+## Results
+
+The bench-trained model (868 real normal rows of session 01) on the **held-out test session
+02** (1993 rows, never used for training or any choice, run once through the live pipeline).
+Rows flagged of the fault rows, **live labels** (as switched by hand, the fair comparison):
+
+| Fault | Rules (board) | ML |
+|---|---|---|
+| Subtle vibration (below the limit) | 21 of 71 | **39 of 71** |
+| Subtle sound (below the limit) | 10 of 301 | **90 of 301** |
+| Strong vibration | 37 of 43 | 35 of 43 |
+| Loud claps | 15 of 26 | 19 of 26 |
+| Temperature (fingertip) | 59 of 100, after 41 s | **87 of 100, at once** |
+| Safety zone / water leak | 30 of 40 / 37 of 40 | not ML sensors |
+| False alarms, hands-off normal | 24 of 799 (3.0 %) | 71 of 799 (8.9 %) |
+
+- **Did ML catch the subtle faults the rules missed? Partly:** 24 of the 50 subtle-vibration
+  rows and 82 of the 291 subtle-sound rows the rules missed.
+- **Forecast:** on the temperature step it predicted WARNING **34 s** before the board reached it.
+- **Cost:** more false alarms than the rules. That is why ML is advisory and can never raise
+  CRITICAL; only the rules do.
+
+Both label sets, the per-fault delays and every decision:
+[`docs/eval/eval_real_session_02.md`](docs/eval/eval_real_session_02.md) and
+[`docs/phase8_report.md`](docs/phase8_report.md). One bench, one session: these are
+indications, not general accuracy figures.
 
 ## Architecture
 
@@ -107,7 +135,7 @@ Chromium; run `npm run screenshots:install` again before `npm run screenshots`.
 | `dashboard/` | React + TypeScript dashboard (run instructions: [`dashboard/README.md`](dashboard/README.md)). |
 | `data/recordings/` | Recorded sensor data (CSV), committed to git. |
 | `data/synthetic/` | Generated training data (not in git; recreate with `backend/scripts/generate_synthetic.py`). |
-| `models/` | Trained ML model, committed to git. **Currently PROVISIONAL: trained on synthetic data only** (see [`models/README.md`](models/README.md)). |
+| `models/` | Trained ML model, committed to git: **bench-trained on real data (session 01)**, not for a real machine as-is (see [`models/README.md`](models/README.md)). |
 | `docs/eval/` | Evaluation reports. Only reports on real recordings are results. |
 | `docs/DATA_CONTRACT.md` | **Serial format and stored-data format.** Read this first. |
 | `packaging/` | PyInstaller spec, release assembler, start scripts and `QUICK_START.txt` for the portable build. |

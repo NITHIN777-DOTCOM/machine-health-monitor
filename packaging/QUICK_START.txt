@@ -106,7 +106,9 @@ no internet. You can run it from this folder, a pendrive, or anywhere else.
 
 IMPORTANT: ABOUT THE ML MODEL
 -----------------------------
-  The ML model in this version is PROVISIONAL: it was trained on simulated
-  data only. The dashboard marks it "provisional model". It is fine for a
-  demo; it is not a measured result. Using this on a real machine needs that
-  machine's own normal data, re-derived limits and a retrained model.
+  The ML model is BENCH-TRAINED: it learned from real recordings of the
+  demo bench (session 01) and was tested once on a held-out session (02).
+  The dashboard's "Model" button shows that test: rules vs ML per fault,
+  false alarms, the forecast lead. ML is advisory (it can never raise
+  CRITICAL; only the threshold rules do). Using this on a real machine needs
+  that machine's own normal data, re-derived limits and a retrained model.

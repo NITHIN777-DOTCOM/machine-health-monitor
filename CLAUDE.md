@@ -21,16 +21,17 @@ so docs and UI text must be clear to a newcomer.
 | `backend/config/sim_profile.json` | Simulator baselines + scenarios |
 | `backend/app/` | `main.py` (API + dashboard at `/`), `launcher.py` (exe entry), `paths.py` (frozen vs repo paths), `version.py`, `pipeline.py`, `analysis.py` (live ML/overall/headline), `device_rules.py`, `registry.py`, `models.py`, `recorder.py`, `state.py`, `sources/` (simulator, serial_source, replay), `ml/` (features, training, scorer, forecast, evaluation, dataset, jobs) |
 | `backend/scripts/` | `ws_peek.py`, `generate_synthetic.py`, `make_demo_recording.py`, `train.py`, `evaluate.py`, `gen_firmware_config.py` (sensors.json + settings.json → `config_generated.h`), `firmware_parity.py` (board vs device_rules.py), `run_tests.bat` |
-| `backend/tests/` | pytest suite (334 tests), `helpers.py`, `conftest.py` |
+| `backend/tests/` | pytest suite (364 tests), `helpers.py`, `conftest.py` |
 | `build.bat`, `packaging/` | Portable build: `MachineHealthMonitor.spec` (onedir), `build_release.py` (version.json, assemble + zip), `Start.bat`, `Start (simulator only).bat`, `QUICK_START.txt`. `backend/mhm_entry.py` = PyInstaller stub, `backend/requirements-build.txt` pins PyInstaller |
 | `release/`, `build_test/`, `logs/`, `data/demo/` | Build output, portability-test copies, runtime logs, generated demo recording (all gitignored) |
 | `dashboard/` | Vite + React 19 + TS (strict) + Recharts. `src/types.ts` mirrors the backend JSON; `src/lib/` pure helpers (Vitest); `scripts/screenshots.mjs` (Playwright, project-local Chromium). See `dashboard/README.md` |
 | `docs/screenshots/phase5/` | Review screenshots (committed; `npm run screenshots`) |
 | `docs/phase5_report.md` | Phase 5 report (redesign, health curve, controls, decisions) |
+| `docs/phase8_report.md` | Phase 8.2 report (real-data model, selection rule, calibration, held-out evaluation, limit suggestions) |
 | `firmware/` | `README.md` (pins, defines, LCD/buzzer, watchdog, parity, memory, libraries), `machine_monitor/` (v1.0.2: `.ino`, `config_generated.h` GENERATED, `state_machine.h`, `display.h`, `buzzer.h`), `tests/` (single-sensor sketches, `RESULTS.md`, `HIL_RESULTS.md` = Phase 7.2 bench test), `build/` (gitignored) |
 | `data/recordings/` | Real recordings (committed), roles in `MANIFEST.json` (test: `test_recordings_manifest.py`), protocol + label rules in `README.md`: `real_session_01_20261024.csv` = **train** (Phase 7.2 HIL, 3408 rows, 868 normal / 686 fault / 1854 unknown), `real_session_02_test_20261024.csv` = **test, held out** (Phase 8.1, 1993 rows, 921 / 246 / 826, incl. subtle below-limit vibration + sound). `data/synthetic/` is gitignored, regenerate it |
-| `models/` | `model.joblib` + `model_meta.json` (committed, PROVISIONAL) |
-| `docs/eval/` | Eval reports; `*_SIMULATED.md` are gitignored |
+| `models/` | `model.joblib` + `model_meta.json` (committed; bench-trained on session 01, `provisional: false`) |
+| `docs/eval/` | Eval reports; `*_SIMULATED.md` are gitignored. `eval_real_session_02.md/.json` = held-out test result (JSON bundled in the exe, `GET /api/model/evaluation`, dashboard Model panel); `phase8_validation.json`, `phase8_b4_review.json` = model selection |
 
 ## Commands (Windows; from `backend/`, venv at `backend/venv`)
 ```
@@ -84,8 +85,10 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   HC-SR04 (D9/D10) **enabled** (Phase 7.1); INA219 `enabled: false` (not fitted; `group: ina219` → current_ma +
   bus_v toggle together; a mismatched group is disabled with a warning).
 - ML sensors = `enabled AND include_in_ml` = the 4 core values only (leak/distance are rule-only events,
-  current_ma/bus_v excluded), so the shipped model still matches (test). `forecast: true` only for temp_c (humidity has no limits).
-- **Demo limits are provisional** (`limits_note`, retune in Phase 8): temp 32/35, sound 40/120,
+  current_ma/bus_v excluded), so the shipped model still matches (test). Per-sensor `ml_stats` (Phase 8.2):
+  temp_c and humidity enter ML by std + slope only (their level drifts with the room) → 16 features; a model
+  whose features don't match → NEEDS_RETRAIN. `forecast: true` only for temp_c (humidity has no limits).
+- **Demo limits are provisional** (`limits_note`; Phase 8.2 suggestions are report-only, `docs/phase8_report.md` §5): temp 32/35, sound 40/120,
   vibration 50/100 (h 10, bench-calibrated in 7.2), leak 50/200 (h 20), all "above"; **humidity has no
   rule limits** (Chennai room ~80 %RH, DHT11 tops out at 90; still shown and in ML); **distance_cm = safety zone, "below"
   20/10 (h 3)**. HC-SR04 no echo = **400** (nothing in range, clear; `out_of_range_value`, dashboard
@@ -108,11 +111,13 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   feature beats a larger std/slope z in the causes ("far above normal" over "very unstable"); the dashboard
   lists causes only while ML is ANOMALY or health ≤ clear level, else "Nothing unusual".
 - **Data rules (enforced in code):** sessions with role `test` in `data/recordings/MANIFEST.json` are never used for
-  training or tuning (Phase 8.2 must enforce this); train on `label=normal` only; synthetic data for training only (→ model
+  training or tuning (`app/ml/roles.py`: train.py takes only `train` sessions, evaluate.py refuses `train` files except
+  `--validation`; matched by name and sha256, raw variants inherit the role); train on `label=normal` only; synthetic data for training only (→ model
   `provisional: true`); **no accuracy numbers without real recordings with induced, labelled faults**:
   evaluate.py refuses otherwise, and `--dev-synthetic` output is stamped "SIMULATED DATA - NOT A RESULT".
   Eval false alarms exclude a 15 s margin (window + hold) after each fault; the raw rate is reported too.
-- **The current model is provisional** (synthetic only). **Deploying on a real machine needs that machine's
+- **The current model is bench-trained** (session 01 real normal rows, chosen by `scripts/select_model.py`'s pre-stated
+  rule, tested once on session 02). **Deploying on a real machine needs that machine's
   own normal data, re-derived limits and a retrained model** (DATA_CONTRACT §8).
 - Warm start: the first W live rows show ML "settling" (no health, no escalation) because the window
   mixes recorded and live data.
@@ -135,8 +140,9 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   silent vs wrong-format notice) → 7.2 (hardware-in-the-loop test, first real recording, passive
   buzzer `tone()` + sound blanking = firmware v1.0.2, vibration 50/100, humidity without limits,
   mirror reset on device restart; `firmware/tests/HIL_RESULTS.md`) → 8.1 (held-out real test session 02,
-  `data/recordings/MANIFEST.json` roles).
-- Next: 8.2 retrain on train-role data + evaluate on the test session only, retune limits; rebuild the release; 9 release + docs.
+  `data/recordings/MANIFEST.json` roles) → 8.2 (raw recordings + roles in code, `ml_stats`, bench-trained model,
+  held-out evaluation, dashboard Model panel, sim profile like the bench, release v0.8.0; `docs/phase8_report.md`).
+- Next: 9 final release + docs (limit retune is a team decision: suggestions in phase8_report §5).
 
 ## Known open items
 - Dashboard "recovering" rule (done in Phase 4, `dashboard/src/lib/format.ts`): the banner says "Recovering"
@@ -148,8 +154,9 @@ Version number: `VERSION` in `backend/app/version.py` (bump it per release).
   shifted analog readings ~20 counts). The mic hears it, so sound samples are blanked while it sounds + 50 ms.
 - **Demo: tap the vibration sensor itself, not the table** (a knock is also loud and shakes the breadboard);
   reach from the side, not over the HC-SR04. Loose 5V/GND jumpers caused USB drops + LCD garbage on the bench.
-- Live ML shows ANOMALY on real bench data (model is synthetic-only, provisional): expected until Phase 8.
-- The portable release still has the empty firmware folder: rebuild after Phase 7.2.
+- ML false alarms on bench normal rows are 5-14 % (rules 0-6 %), partly from DHT11 0.1 °C steps; the forecast also
+  fires on those steps (114 of 1736 rows in session 02) and on the simulator's temperature wander.
+- Phase 8.2 live check with the board (optional part E) was skipped.
 - The exe is unsigned: SmartScreen "More info → Run anyway" on first start (documented in QUICK_START.txt).
 - Portability test not yet done with the Arduino plugged in (exe auto-detection of the Uno unverified).
 - INA219 untested (not fitted; the `USE_INA219 1` build compiles). `LEAK_POWER_PIN` option untested.

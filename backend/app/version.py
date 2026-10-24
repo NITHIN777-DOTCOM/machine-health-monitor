@@ -15,7 +15,7 @@ from . import paths
 
 APP_NAME = "Predictive Machine Health Monitor"
 APP_ID = "machine-health-monitor"      # lets the launcher recognise an instance already running
-VERSION = "0.6.0"
+VERSION = "0.8.0"
 
 
 @lru_cache(maxsize=1)
