@@ -15,13 +15,16 @@ from .device_rules import DeviceStateMachine
 from .ml import dataset
 from .ml.jobs import TrainJobs
 from .ml.scorer import Scorer
+from .config import Settings
 from .models import SensorRow
+from .recorder import Recorder
+from .registry import Registry
 from .sources import ReplaySource, SerialSource, SimulatorSource, Source
 from .sources.replay import resolve_recording
 from .version import version_info
 from .sources.serial_source import port_exists, resolve_port
 from .sources.simulator import load_profile
-from .state import AppState
+from .state import AppState, RingBuffer
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ REJECT_RECENT_S = 15.0  # a rejected line this recent means "data is arriving, w
 
 
 class Pipeline:
-    def __init__(self, state: AppState):
+    def __init__(self, state: AppState, scorer: Scorer | None = None):
         self.state = state
         self.source: Source | None = None
         self._task: asyncio.Task[None] | None = None
@@ -49,11 +52,28 @@ class Pipeline:
         self._reported_connected: bool | None = None
         self._watchdog: asyncio.Task[None] | None = None
         # ML + forecast. The model is loaded once; reload_model() swaps it at runtime.
-        self.scorer = Scorer.load(state.registry, state.settings.models_dir)
+        self.scorer = scorer if scorer is not None else Scorer.load(state.registry, state.settings.models_dir)
         self.analyzer = Analyzer(state.registry, state.settings, self.scorer)
         self.train_jobs = TrainJobs(state.registry, state.settings, on_done=self.reload_model)
         self._serial_cache: tuple[float, dict[str, Any]] | None = None
         self._last_notify = 0.0
+
+    @classmethod
+    def offline(cls, registry: Registry, settings: Settings, scorer: Scorer | None) -> "Pipeline":
+        """A pipeline for offline evaluation (ml/evaluation.py): only process(row) is used, so
+        a recording gets exactly the live analysis (mirror, smoothed ML, forecast). Nothing is
+        recorded or broadcast. scorer None = no model."""
+        state = AppState(registry=registry, settings=settings,
+                         recorder=Recorder(registry, settings.recordings_dir), history=RingBuffer(1, 1))
+        return cls(state, scorer if scorer is not None else Scorer(registry))
+
+    def reset_analysis(self) -> None:
+        """Forget the device mirror, ML windows/smoothing and forecast history (new source)."""
+        self.state.history.clear()
+        self.device.reset()
+        self.device_reported = None
+        self._last_ms = None
+        self.analyzer.reset()
 
     # ---- source construction ---------------------------------------------------------
     def make_source(self, type: str, scenario: str | None = None, speed: float | None = None,
@@ -87,11 +107,7 @@ class Pipeline:
         its first row, so the stream never shows "warming up"."""
         await self.stop()
         self.source = source
-        self.state.history.clear()
-        self.device.reset()
-        self.device_reported = None
-        self._last_ms = None
-        self.analyzer.reset()
+        self.reset_analysis()
         if warmstart_file:
             self.warm_start(warmstart_file)
         self._started_at = time.monotonic()

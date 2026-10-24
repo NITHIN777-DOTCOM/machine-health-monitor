@@ -1,9 +1,11 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "rules": [
-    "role 'train': may be used for training and threshold tuning",
+    "role 'train': may be used for training and threshold tuning (and for validation)",
     "role 'test': held out; evaluation only, never for training, tuning limits or choosing thresholds",
-    "every real recording in this folder must be listed here",
+    "every real recording in this folder (and in raw/) must be listed here",
+    "a 'raw' variant is the same session with the labels as set live (before clean-up); it has its session's role",
+    "files are matched by name AND by sha256, so a renamed copy keeps its role",
     "duration_s = wall-clock span first to last row; recorded_s = device-clock time actually recorded"
   ],
   "sessions": [
@@ -22,7 +24,76 @@
         "unknown": 1854
       },
       "phase": "7.2",
-      "notes": "HIL test session; firmware v1.0.0 -> v1.0.2 during the session; see firmware/tests/HIL_RESULTS.md"
+      "notes": "HIL test session; firmware v1.0.0 -> v1.0.2 during the session; see firmware/tests/HIL_RESULTS.md",
+      "sha256": "7f27198720d8da1ac270f6b27b329be64907bf413eae18df5f417f6e507b98ac",
+      "raw": [
+        {
+          "file": "raw/session_20261024_105214.csv",
+          "sha256": "0d6fdd15c535fc2bb4b28e1bc59ad95c298aae121b3a82c90eb33673223899c0",
+          "rows": 751,
+          "labels": {
+            "normal": 337,
+            "fault": 0,
+            "unknown": 414
+          },
+          "note": "original part 1 of 6, labels as set live"
+        },
+        {
+          "file": "raw/session_20261024_110727.csv",
+          "sha256": "09516da76364372225b01f7fc2ac91d35c64c18510eb10e0c66a013e269f4bf5",
+          "rows": 677,
+          "labels": {
+            "normal": 195,
+            "fault": 295,
+            "unknown": 187
+          },
+          "note": "original part 2 of 6, labels as set live"
+        },
+        {
+          "file": "raw/session_20261024_113005.csv",
+          "sha256": "8f13efb627228026306672ea42a12a77e2b2896f3b5d1ad35afa9a55d41ba421",
+          "rows": 406,
+          "labels": {
+            "normal": 193,
+            "fault": 205,
+            "unknown": 8
+          },
+          "note": "original part 3 of 6, labels as set live"
+        },
+        {
+          "file": "raw/session_20261024_114540.csv",
+          "sha256": "d5731c60711c54a44611d499c342ea37044bf77a3510100eb9b904a38b8e8523",
+          "rows": 108,
+          "labels": {
+            "normal": 5,
+            "fault": 103,
+            "unknown": 0
+          },
+          "note": "original part 4 of 6, labels as set live"
+        },
+        {
+          "file": "raw/session_20261024_115406.csv",
+          "sha256": "2991e9370155d55b29841e5d4c4afc79c7e85ffbd732970a81dff3e20c77a87c",
+          "rows": 142,
+          "labels": {
+            "normal": 4,
+            "fault": 138,
+            "unknown": 0
+          },
+          "note": "original part 5 of 6, labels as set live"
+        },
+        {
+          "file": "raw/session_20261024_120014.csv",
+          "sha256": "e71d24488f05423f2fd4442eaf95f1c52e8be39d93d4c47f3ac6d42af77fa1e2",
+          "rows": 1324,
+          "labels": {
+            "normal": 325,
+            "fault": 927,
+            "unknown": 72
+          },
+          "note": "original part 6 of 6, labels as set live"
+        }
+      ]
     },
     {
       "file": "real_session_02_test_20261024.csv",
@@ -39,7 +110,23 @@
         "unknown": 826
       },
       "phase": "8.1",
-      "notes": "Held-out test session (firmware v1.0.2), never used for training or tuning; includes subtle below-limit vibration and sound faults; see data/recordings/README.md"
+      "notes": "Held-out test session (firmware v1.0.2), never used for training or tuning; includes subtle below-limit vibration and sound faults; see data/recordings/README.md",
+      "sha256": "b00ccef33a2e79212575b86338529e818b57933fba417cd367e7513725a88317",
+      "raw": [
+        {
+          "file": "raw/raw_session_20261024_153633.csv",
+          "sha256": "8995e849c2d49e21b1a403d1a01e69ed44775c91a71b8f92743e5919b7619116",
+          "rows": 1993,
+          "labels": {
+            "normal": 1055,
+            "fault": 621,
+            "unknown": 317
+          },
+          "note": "the whole session, labels as set live"
+        }
+      ],
+      "steps_file": "raw/session_02_steps.tsv",
+      "cleanup_script": "raw/clean_session_02.py"
     }
   ]
 }

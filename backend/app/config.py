@@ -63,6 +63,11 @@ class Settings:
         """Where replay / warm start / training look for a recording by name."""
         return [self.recordings_dir] + ([self.demo_dir] if self.demo_dir else [])
 
+    @property
+    def manifest_file(self) -> Path:
+        """Data roles (train/test) of the recordings, ml/roles.py."""
+        return self.recordings_dir / paths.MANIFEST_FILE.name
+
 
 def load_settings(path: Path = SETTINGS_PATH) -> Settings:
     """Load settings; a missing or broken file falls back to defaults (never raises)."""

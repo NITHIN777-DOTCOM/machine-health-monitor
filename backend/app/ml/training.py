@@ -98,7 +98,11 @@ def calibrate(scores: np.ndarray, threshold: float) -> dict[str, float]:
 
 def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_missing_frac: float = 0.3,
           n_estimators: int = 200, contamination: float = 0.01, random_state: int = 42,
+          sessions: list[str] | None = None, extra_meta: dict[str, Any] | None = None,
           ) -> tuple[IsolationForest, dict[str, Any]]:
+    """Fit on the label=normal rows of `dataset`. sessions: the recording sessions behind the
+    real rows (MANIFEST.json names, for the meta); extra_meta overrides/extends the meta
+    (status line, selection rule, deployment note)."""
     sensors = ml_sensor_keys(registry)
     if not sensors:
         raise TrainingError("No ML sensors: no sensor has enabled AND include_in_ml in sensors.json")
@@ -115,7 +119,8 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
 
     health = np.array([health_from_score(s, cal) for s in scores])
     names = feature_names(sensors)
-    synthetic_used = info["rows_normal_by_source"]["synthetic"] > 0
+    n_real, n_syn = info["rows_normal_by_source"]["real"], info["rows_normal_by_source"]["synthetic"]
+    synthetic_used = n_syn > 0
     meta: dict[str, Any] = {
         "created": datetime.now().astimezone().isoformat(timespec="seconds"),
         "model_type": "IsolationForest",
@@ -126,6 +131,8 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
         "feature_names": names,
         "window_s": window_s,
         "max_missing_frac": max_missing_frac,
+        "trained_on": {"real_rows": n_real, "synthetic_rows": n_syn, "sessions": list(sessions or [])},
+        "status": default_status(n_real, n_syn, sessions),
         "training": {
             "files": [Path(f).name for f in dataset.files],
             "windows": int(len(X)),
@@ -144,7 +151,18 @@ def train(dataset: Dataset, registry: Registry, *, window_s: float = 10, max_mis
         "provisional_reason": ("trained on synthetic data; retrain on real normal recordings (Phase 8)"
                                if synthetic_used else None),
     }
+    meta.update(extra_meta or {})
     return model, meta
+
+
+def default_status(n_real: int, n_syn: int, sessions: list[str] | None) -> str:
+    """One plain line for the dashboard: what the model was trained on."""
+    where = f" ({', '.join(sessions)})" if sessions else ""
+    if n_real and n_syn:
+        return f"trained on real{where} + synthetic normal data"
+    if n_real:
+        return f"trained on real normal data{where}"
+    return "provisional: trained on simulated data only"
 
 
 def save(model: IsolationForest, meta: dict[str, Any], out_dir: Path) -> tuple[Path, Path]:

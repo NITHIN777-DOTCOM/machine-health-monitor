@@ -40,6 +40,52 @@ class Dataset:
         rows = self.rows
         return {"source": dict(Counter(r.source for r in rows)), "label": dict(Counter(r.label for r in rows))}
 
+    def real_by_file(self) -> dict[str, bool]:
+        """File name -> whether it has any source=real row (for the data-role check)."""
+        out: dict[str, bool] = {Path(f).name: False for f in self.files}
+        for seg in self.segments:
+            out[seg.file] = out.get(seg.file, False) or any(r.source == "real" for r in seg.rows)
+        return out
+
+    def relabelled(self, change: dict[int, str]) -> "Dataset":
+        """A copy where the rows at the given positions (index into self.rows) get a new label."""
+        segments, i = [], 0
+        for seg in self.segments:
+            rows = []
+            for r in seg.rows:
+                rows.append(r.with_meta(label=change[i]) if i in change else r)
+                i += 1
+            segments.append(Segment(seg.file, rows))
+        return Dataset(self.files, segments, self.bad_rows)
+
+
+HOLDOUT = "holdout"    # label given to held-out normal rows in the training copy (never trained on)
+
+
+def holdout_last_normal(data: Dataset, frac: float) -> tuple[Dataset, Dataset, dict]:
+    """Time split for validation: the LAST `frac` of the label=normal rows (in recording
+    order, by ts_iso) are held out.
+
+    Returns (train, validation, info):
+      train       held-out normal rows relabelled "holdout" (skipped by training, and they
+                  break the window, so no training window touches them)
+      validation  the training normal rows relabelled "unknown" (not counted, but kept in
+                  the stream so the live pipeline's windows run as they would live);
+                  fault rows keep their label: the model never trains on them anyway
+    """
+    if not 0 < frac < 1:
+        raise ValueError("holdout fraction must be between 0 and 1")
+    rows = data.rows
+    normal = sorted((i for i, r in enumerate(rows) if r.label == "normal"), key=lambda i: (rows[i].ts_iso, i))
+    n_hold = int(round(len(normal) * frac))
+    held = set(normal[len(normal) - n_hold:])
+    kept = [i for i in normal if i not in held]
+    info = {"holdout_frac": frac, "train_normal_rows": len(kept), "holdout_normal_rows": len(held),
+            "holdout_from": rows[min(held, key=lambda i: (rows[i].ts_iso, i))].ts_iso if held else None}
+    train = data.relabelled({i: HOLDOUT for i in held})
+    validation = data.relabelled({i: "unknown" for i in kept})
+    return train, validation, info
+
 
 def expand(patterns: Iterable[str]) -> list[Path]:
     """Files and globs -> sorted unique existing CSV paths."""

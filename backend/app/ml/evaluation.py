@@ -18,15 +18,16 @@ window is still warming up, and rows labelled "unknown", are not evaluated):
   episode           = a run of consecutive label=fault rows in one recording
   detection delay   = seconds (device clock) from an episode's first row to the first
                       flagged window inside it; episodes never flagged count as missed
+Every row goes through the live pipeline (Pipeline.process), so the ML verdict is the
+smoothed one the dashboard shows (ANOMALY after 3 rows below 50, clears after 5 above 60).
 Detectors:
-  ml              model says ANOMALY
+  ml              the smoothed ML status is ANOMALY
   rules           device dev_state is WARNING or CRITICAL
   rules_critical  device dev_state is CRITICAL
   forecast        trend forecast predicts (or sees) a CRITICAL limit within the cap
 """
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -35,7 +36,6 @@ from ..config import Settings
 from ..registry import Registry
 from .dataset import Dataset, Segment
 from .features import FeatureWindow, ml_sensor_keys
-from .forecast import forecast, predicts_critical
 from .scorer import ANOMALY, Scorer
 
 STAMP = "SIMULATED DATA - NOT A RESULT"
@@ -88,21 +88,34 @@ class Episode:
 
 
 def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: Settings) -> dict[str, Any]:
+    """Replay the dataset through the LIVE pipeline (Pipeline.process: device-rule mirror,
+    smoothed ML, forecast) and count each detector's flags. One pipeline run per file, as
+    if each file were played live; the result also has a per-row "trace" (every row,
+    including unknown ones) for per-step reports and charts."""
+    from ..pipeline import Pipeline      # lazy: the pipeline imports the ML package
+
     ml_on = scorer is not None and scorer.ready
     dets = [d for d in DETECTORS if d != "ml" or ml_on]
-    counts = {d: {"fault": 0, "fault_flagged": 0, "normal": 0, "normal_flagged": 0,
-                  "normal_raw": 0, "normal_raw_flagged": 0} for d in dets}
+    counts = {d: {"fault": 0, "fault_flagged": 0, "normal": 0, "normal_raw_flagged": 0,
+                  "normal_flagged": 0, "normal_raw": 0} for d in dets}
     window_s = scorer.meta["window_s"] if ml_on else settings.ml_window_s
     margin_ms = (window_s + settings.hold_seconds) * 1000
     episodes: list[Episode] = []
+    trace: list[dict[str, Any]] = []
+    pipe = Pipeline.offline(registry, settings, scorer if ml_on else None)
+    current_file: str | None = None
 
     for seg in dataset.segments:
+        if seg.file != current_file:
+            pipe.reset_analysis()
+            current_file = seg.file
+        # Same window as the model (or the settings): a row counts once its window is full.
         fw = scorer.make_window() if ml_on else FeatureWindow(
             ml_sensor_keys(registry), settings.ml_window_s, settings.ml_max_missing_frac)
-        hist: deque = deque()
         ep: Episode | None = None
         last_fault_ms: int | None = None
         for row in seg.rows:
+            analysis = pipe.process(row)
             if row.label == "fault":
                 last_fault_ms = row.ms
                 if ep is None:
@@ -112,21 +125,20 @@ def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: S
             else:
                 ep = None
             feats = fw.push_row(row)
-            hist.append(row)
-            while hist and hist[0].ms <= row.ms - settings.forecast_window_s * 1000:
-                hist.popleft()
-            if feats is None or row.label not in ("normal", "fault"):
-                continue
             flags = {
                 "rules": row.dev_state in ("WARNING", "CRITICAL"),
                 "rules_critical": row.dev_state == "CRITICAL",
-                "forecast": predicts_critical(forecast(list(hist), registry, window_s=settings.forecast_window_s,
-                                                       min_r2=settings.forecast_min_r2, cap_s=settings.forecast_cap_s)),
+                "forecast": any(f["seconds_to_critical"] is not None for f in analysis["forecast"].values()),
             }
             if ml_on:
-                flags["ml"] = scorer.score(feats)["ml_status"] == ANOMALY
+                flags["ml"] = analysis["ml"]["status"] == ANOMALY
+            evaluated = feats is not None and row.label in ("normal", "fault")
             in_margin = (row.label == "normal" and last_fault_ms is not None
                          and row.ms - last_fault_ms <= margin_ms)
+            trace.append(trace_row(seg.file, row, analysis, flags, window_full=feats is not None,
+                                   after_fault_s=None if last_fault_ms is None else (row.ms - last_fault_ms) / 1000))
+            if not evaluated:
+                continue
             for d in dets:
                 if row.label == "fault":
                     counts[d]["fault"] += 1
@@ -154,8 +166,23 @@ def run(dataset: Dataset, registry: Registry, scorer: Scorer | None, settings: S
             "mean_delay_s": sum(delays) / len(delays) if delays else None,
         }
     return {"detectors": dets, "metrics": metrics, "episodes": episodes, "margin_s": margin_ms / 1000,
+            "trace": trace,
             "ml_status": scorer.status if scorer else "NO_MODEL",
             "ml_message": scorer.message if scorer else "no model loaded"}
+
+
+def trace_row(file: str, row: Any, analysis: dict[str, Any], flags: dict[str, bool], *, window_full: bool,
+              after_fault_s: float | None) -> dict[str, Any]:
+    """The per-row facts a report or chart needs (values, label, verdicts, health, forecast)."""
+    ml = analysis["ml"]
+    return {
+        "file": file, "ms": row.ms, "ts": row.ts_iso, "label": row.label, "values": dict(row.values),
+        "dev_state": row.dev_state, "mirror_state": analysis["device"]["state"],
+        "ml_status": ml["status"], "health": ml["health"], "ml_instant": ml.get("instant"),
+        "forecast": {k: {"to_warn_s": f["seconds_to_warn"], "to_critical_s": f["seconds_to_critical"]}
+                     for k, f in analysis["forecast"].items()},
+        "flags": flags, "window_full": window_full, "after_fault_s": after_fault_s,
+    }
 
 
 # ---- reporting --------------------------------------------------------------------------

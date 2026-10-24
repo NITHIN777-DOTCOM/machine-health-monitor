@@ -52,6 +52,7 @@ VERSION_FILE = BUNDLE_DIR / "version.json"     # written by the build; absent in
 CONFIG_DIR = APP_DIR / "config" if FROZEN else APP_DIR / "backend" / "config"
 MODELS_DIR = APP_DIR / "models"
 RECORDINGS_DIR = APP_DIR / "data" / "recordings"
+MANIFEST_FILE = RECORDINGS_DIR / "MANIFEST.json"   # data roles (train/test), ml/roles.py
 DEMO_DIR = APP_DIR / "data" / "demo"
 LOGS_DIR = APP_DIR / "logs"
 

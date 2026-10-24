@@ -8,6 +8,15 @@ input contains real rows labelled "fault" (an induced, marked fault). --dev-synt
 allows synthetic data for development checks; every output line and the report are then
 stamped "SIMULATED DATA - NOT A RESULT".
 
+DATA ROLES (data/recordings/MANIFEST.json, app/ml/roles.py): by default this computes
+FINAL TEST numbers, so any "train" session (or a renamed copy of one) is refused: the
+model has seen it. --validation is for choices during development (model selection,
+calibration) and accepts ONLY "train" sessions, so the held-out test session cannot
+influence a choice; its output is stamped VALIDATION. With --holdout-last FRAC only the
+normal rows that train.py --holdout-last FRAC left out are counted as normal.
+
+Every row runs through the live pipeline (device-rule mirror, smoothed ML, forecast).
+
 Writes a markdown report to docs/eval/ (simulated reports get a _SIMULATED suffix).
 Exit codes: 0 ok, 2 refused / bad input.
 """
@@ -21,7 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import MODELS_DIR, ROOT_DIR, load_settings  # noqa: E402
-from app.ml import dataset, evaluation  # noqa: E402
+from app.ml import dataset, evaluation, roles  # noqa: E402
+from app.paths import MANIFEST_FILE  # noqa: E402
 from app.ml.scorer import Scorer  # noqa: E402
 from app.registry import Registry  # noqa: E402
 
@@ -36,7 +46,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model-dir", type=Path, default=MODELS_DIR)
     ap.add_argument("--out-dir", type=Path, default=REPORT_DIR)
     ap.add_argument("--no-report", action="store_true", help="print only, do not write a report file")
+    ap.add_argument("--validation", action="store_true",
+                    help="validation on 'train' sessions only (not final test numbers)")
+    ap.add_argument("--holdout-last", type=float, metavar="FRAC",
+                    help="with --validation: count only the last FRAC of the normal rows (train.py's holdout)")
+    ap.add_argument("--manifest", type=Path, default=MANIFEST_FILE, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.holdout_last and not args.validation:
+        ap.error("--holdout-last needs --validation")
     sim = args.dev_synthetic
 
     def say(msg: str = "", err: bool = False) -> None:
@@ -49,10 +66,21 @@ def main(argv: list[str] | None = None) -> int:
         say(f"No CSV files match {args.inputs}", err=True)
         return 2
     try:
+        role_notes = roles.check_evaluation([Path(f) for f in data.files], roles.Manifest.load(args.manifest),
+                                            validation=args.validation)
+    except roles.RoleError as exc:
+        say(str(exc), err=True)
+        return 2
+    if args.holdout_last:
+        _, data, split = dataset.holdout_last_normal(data, args.holdout_last)
+        role_notes.append(f"validation normal rows: the last {args.holdout_last:.0%} ({split['holdout_normal_rows']} "
+                          f"rows from {split['holdout_from']}); the earlier normal rows were trained on, not counted")
+    try:
         selected, notes = evaluation.select(data, allow_synthetic=sim)
     except evaluation.EvaluationRefused as exc:
         say(f"Evaluation refused: {exc}", err=True)
         return 2
+    notes = role_notes + notes
 
     scorer = Scorer.load(registry, args.model_dir)
     counts = selected.counts()
@@ -63,11 +91,12 @@ def main(argv: list[str] | None = None) -> int:
         say("Model is PROVISIONAL (trained with synthetic data).")
     result = evaluation.run(selected, registry, scorer, settings)
     for line in evaluation.format_lines(result, simulated=sim):
-        print(line)
+        print(f"[VALIDATION] {line}" if args.validation else line)
 
     if not args.no_report:
         args.out_dir.mkdir(parents=True, exist_ok=True)
-        name = f"eval_{datetime.now():%Y%m%d_%H%M%S}{'_SIMULATED' if sim else ''}.md"
+        kind = "_SIMULATED" if sim else "_VALIDATION" if args.validation else ""
+        name = f"eval_{datetime.now():%Y%m%d_%H%M%S}{kind}.md"
         path = args.out_dir / name
         path.write_text(evaluation.format_report(result, files=[Path(f).name for f in data.files], counts=counts,
                                                  notes=notes, model_info=scorer.info(), simulated=sim),

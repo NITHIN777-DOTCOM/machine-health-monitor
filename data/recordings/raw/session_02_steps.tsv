@@ -1,0 +1,27 @@
+2026-10-24T15:36:33.230+05:30	normal	S1 normal hands-off 3 min
+2026-10-24T15:39:42.001+05:30	normal	S2 normal everyday activity 2 min
+2026-10-24T15:42:33.667+05:30	normal	gap before S3 hands-off 60 s
+2026-10-24T15:43:42.723+05:30	fault	S3 subtle vibration light taps 40 s
+2026-10-24T15:44:53.520+05:30	normal	gap before S4 hands-off 60 s
+2026-10-24T15:45:35.640+05:30	unknown	gap before S4 disturbed (setting up phone / table handled)
+2026-10-24T15:46:25.881+05:30	normal	gap before S4 hands-off 30 s (restart)
+2026-10-24T15:46:56.575+05:30	unknown	gap before S4 disturbed again (vib 78, dist 21)
+2026-10-24T15:47:41.219+05:30	normal	gap before S4 hands-off 30 s (restart 2)
+2026-10-24T15:48:19.242+05:30	fault	S4 subtle sound music/humming 40 s
+2026-10-24T15:52:39.000+05:30	fault	S4 retry: louder/closer (label already fault)
+2026-10-24T15:53:21.116+05:30	normal	gap before S5 hands-off 60 s
+2026-10-24T15:53:53.091+05:30	unknown	gap before S5 disturbed (sound 15-32 after STOP)
+2026-10-24T15:54:16.357+05:30	normal	gap before S5 hands-off 30 s (restart)
+2026-10-24T15:54:54.384+05:30	fault	S5 strong vibration firm knocks 15 s
+2026-10-24T15:55:37.581+05:30	normal	gap before S6 hands-off 60 s
+2026-10-24T15:56:44.294+05:30	fault	S6 loud claps 10 s
+2026-10-24T15:57:09.666+05:30	normal	gap before S7 hands-off 60 s
+2026-10-24T15:58:07.511+05:30	fault	S7 safety zone hand 15 cm then 5 cm
+2026-10-24T15:58:47.001+05:30	normal	gap before S8 hands-off 60 s
+2026-10-24T15:59:53.483+05:30	fault	S8 water leak wet finger + drops 15 s
+2026-10-24T16:00:34.273+05:30	unknown	S8 leak drying (until leak < 20)
+2026-10-24T16:01:26.109+05:30	normal	gap before S9 hands-off 60 s
+2026-10-24T16:02:36.235+05:30	fault	S9 temperature fingertip on DHT11 up to 90 s
+2026-10-24T16:04:16.594+05:30	unknown	S9 cool-down (until within 0.5 C of baseline 30.2)
+2026-10-24T16:06:44.804+05:30	normal	S10 final normal hands-off 3 min
+2026-10-24T16:09:52.000+05:30	stop	recording stopped

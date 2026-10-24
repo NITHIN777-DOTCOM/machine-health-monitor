@@ -13,6 +13,34 @@ Only **real** sensor data recorded from the Arduino lives here (stored column or
 **held out**: evaluation only, never for training, choosing limits or thresholds. That way the
 Phase 8.2 evaluation is on data the model has never seen.
 
+**The roles are enforced in code** (`backend/app/ml/roles.py`, tests in `test_data_roles.py`).
+Files are matched by name and by content hash (`sha256` in the manifest, line endings
+normalised), so a renamed copy keeps its role:
+
+| Tool | Rule |
+|---|---|
+| `scripts/train.py`, `generate_synthetic.py --from-real` | every file with real rows must be a `train` session; `test` files, renamed copies and unlisted real recordings are refused |
+| `POST /api/model/train` (dashboard retrain) | `test` files refused; unlisted recordings allowed (a deployed machine's own new data) |
+| `scripts/evaluate.py` (final test numbers) | `train` sessions refused (the model has seen them) |
+| `scripts/evaluate.py --validation` | `train` sessions only, so the test session cannot influence a choice |
+
+## `raw/`: the original, live-labelled files
+
+The cleaned files above have their labels tidied after the session (rules below and in
+`firmware/tests/HIL_RESULTS.md`). The originals are kept, **with the labels as they were set
+live**, so the clean-up can be checked and the evaluation can be repeated on the live labels.
+The manifest lists them as `raw` variants of their session (same role); the sensor rows are
+identical, only `label` differs (`test_recordings_manifest.py` checks this).
+
+| File | Session | Rows | Live labels normal / fault / unknown |
+|---|---|---|---|
+| `raw/session_20261024_105214.csv` … `raw/session_20261024_120014.csv` (6 parts) | 01 (train) | 3408 | 1059 / 1668 / 681 |
+| `raw/raw_session_20261024_153633.csv` | 02 (test) | 1993 | 1055 / 621 / 317 |
+| `raw/session_02_steps.tsv` | 02 | | the live step log: time, label, step name (used by the per-step evaluation) |
+| `raw/clean_session_02.py` | 02 | | the clean-up script that produced `real_session_02_test_20261024.csv` from the raw file |
+
+Training never reads `raw/`: the training session's cleaned labels are the stricter ones.
+
 ## Session 02: held-out test (Phase 8.1, 2026-10-24, 15:36–16:09)
 
 Uno on COM5, firmware `machine_monitor v1.0.2`, dev backend on serial, dashboard open.

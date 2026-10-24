@@ -11,7 +11,8 @@ Output (data/synthetic/, not in git; this script is the source of truth):
 
 Each normal session uses a different seed and a shifted baseline (--jitter), so the
 model does not learn one exact operating point. --from-real replaces the per-sensor
-baselines in sim_profile.json with statistics of real label=normal rows (Phase 8).
+baselines in sim_profile.json with statistics of real label=normal rows (Phase 8); those
+files must be "train" sessions in data/recordings/MANIFEST.json (app/ml/roles.py).
 """
 from __future__ import annotations
 
@@ -28,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np  # noqa: E402
 
 from app.config import ROOT_DIR, load_settings  # noqa: E402
-from app.ml import dataset  # noqa: E402
+from app.ml import dataset, roles  # noqa: E402
+from app.paths import MANIFEST_FILE  # noqa: E402
 from app.models import ParseStats, csv_header  # noqa: E402
 from app.registry import Registry  # noqa: E402
 from app.sources.simulator import SimulatorSource, load_profile  # noqa: E402
@@ -42,9 +44,14 @@ DEV_FAULTS = {  # scenario -> seconds to simulate
 def profile_from_real(profile: dict, patterns: list[str], registry: Registry) -> dict:
     """Replace per-sensor baselines with stats from real label=normal rows."""
     data = dataset.load(patterns, registry)
-    rows = [r for r in data.rows if r.source == "real" and r.label == "normal"]
+    return profile_from_rows(profile, data.rows, where=data.files or patterns)
+
+
+def profile_from_rows(profile: dict, rows: list, where: object = "the input") -> dict:
+    """profile_from_real() on rows already loaded (select_model.py passes only the training split)."""
+    rows = [r for r in rows if r.source == "real" and r.label == "normal"]
     if not rows:
-        sys.exit(f"--from-real: no rows with source=real and label=normal in {data.files or patterns}")
+        sys.exit(f"--from-real: no rows with source=real and label=normal in {where}")
     prof = copy.deepcopy(profile)
     for key, cfg in prof["sensors"].items():
         vals = np.array([r.values[key] for r in rows if r.values.get(key) is not None], dtype=float)
@@ -95,12 +102,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fault-seeds", type=int, default=3, help="dev fault recordings per scenario (0 = none)")
     ap.add_argument("--from-real", nargs="+", metavar="CSV", help="take baselines from real normal recordings")
     ap.add_argument("--out", type=Path, default=OUT_DIR)
+    ap.add_argument("--manifest", type=Path, default=MANIFEST_FILE, help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
 
     registry = Registry.load()
     settings = load_settings()
     profile = load_profile()
     if args.from_real:
+        # Real rows feed training (via the synthetic baselines), so the data roles apply.
+        data = dataset.load(args.from_real, registry)
+        try:
+            roles.check_training([Path(f) for f in data.files], data.real_by_file(), roles.Manifest.load(args.manifest))
+        except roles.RoleError as exc:
+            sys.exit(str(exc))
         print("Baselines from real data:")
         profile = profile_from_real(profile, args.from_real, registry)
     args.out.mkdir(parents=True, exist_ok=True)

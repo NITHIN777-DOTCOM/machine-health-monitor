@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable
 from ..config import Settings
 from ..registry import Registry
 from ..sources.replay import resolve_recording
-from . import dataset, training
+from . import dataset, roles, training
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class TrainJobs:
         if self.busy:
             raise JobBusy("a training job is already running")
         paths = [resolve_recording(self.settings.recording_dirs, f) for f in files]
-        job = {"id": uuid.uuid4().hex[:8], "status": "queued", "step": "queued", "files": list(files),
+        job = {"id": uuid.uuid4().hex[:8], "status": "queued", "step": "queued", "files": list(files), "notes": [],
                "started": time.time(), "finished": None, "elapsed_s": 0.0, "message": None, "result": None}
         self.jobs[job["id"]] = job
         self._task = asyncio.create_task(self._run(job, paths), name=f"train-{job['id']}")
@@ -61,6 +61,11 @@ class TrainJobs:
         try:
             job.update(status="running", step="loading recordings")
             data = await asyncio.to_thread(dataset.load, [str(p) for p in paths], self.registry)
+            # The held-out test session is never trained on. Unlisted recordings are allowed:
+            # on a deployed machine they are its own new normal data (DATA_CONTRACT section 8).
+            notes = roles.check_training(paths, data.real_by_file(), roles.Manifest.load(self.settings.manifest_file),
+                                         strict=False)
+            job["notes"] = notes
             job["step"] = "training"
             model, meta = await asyncio.to_thread(
                 training.train, data, self.registry, window_s=s.ml_window_s, max_missing_frac=s.ml_max_missing_frac)
@@ -73,7 +78,7 @@ class TrainJobs:
                        result={"windows": t["windows"], "rows_normal_by_source": t["rows_normal_by_source"],
                                "provisional": meta["provisional"], "created": meta["created"]})
             log.info("Training job %s done: %s", job["id"], job["result"])
-        except training.TrainingError as exc:
+        except (training.TrainingError, roles.RoleError) as exc:
             job.update(status="failed", message=str(exc))
         except asyncio.CancelledError:
             job.update(status="failed", message="cancelled (server shutting down)")
